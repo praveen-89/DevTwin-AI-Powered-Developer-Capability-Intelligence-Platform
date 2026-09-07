@@ -1,35 +1,48 @@
 # 11. Database Schema
 
 ## Overview
-For the Minor MVP, DevTwin uses a relational database (PostgreSQL) optimized to handle the requirements of the SkillGraph and Evidence Model via junction tables.
+DevTwin uses a normalized PostgreSQL relational database. The schema is specifically designed to support the SkillGraph via junction tables, enforce strict data provenance from analysis runs, and maintain temporal capability history.
 
-## Core Entities
+For the exhaustive column-level specifications, constraints, and data types, see [DOMAIN_MODEL.md](file:///e:/Minor_Project/DevTwin/docs/DOMAIN_MODEL.md).
 
-### 1. Identity & Projects
--   **Developer**: `id, username, github_id, created_at`
--   **Repository**: `id, developer_id, url, name, description, last_analyzed_at`
+## ER Diagram
 
-### 2. SkillGraph Taxonomy
--   **Domain**: `id, name` (e.g., "Frontend", "DevOps")
--   **Skill**: `id, domain_id, name`
--   **Concept**: `id, name`
--   **Technology**: `id, name, type` (e.g., "React", "PostgreSQL")
+```mermaid
+erDiagram
+    DEVELOPER ||--o{ GITHUB_ACCOUNT : has
+    DEVELOPER ||--o{ PROJECT : owns
+    PROJECT ||--o{ REPOSITORY : contains
+    
+    REPOSITORY ||--o{ COMMIT : tracks
+    REPOSITORY ||--o{ ANALYSIS_RUN : undergoes
+    
+    ANALYSIS_RUN ||--o{ OBSERVATION : generates
+    OBSERVATION ||--o{ EVIDENCE : supports
+    OBSERVATION ||--o{ RISK_FINDING : triggers
+    
+    RISK_FINDING }o--o| COMMIT : attributed_to
+    
+    EVIDENCE ||--o{ EVIDENCE_SKILL : maps_to
+    EVIDENCE ||--o{ EVIDENCE_TECH : maps_to
+    
+    DEVELOPER ||--o{ CAPABILITY : possesses
+    CAPABILITY ||--o{ CAPABILITY_HISTORY : logs
+    
+    CAPABILITY }o--o| SKILL : targets
+    CAPABILITY }o--o| TECHNOLOGY : targets
+    CAPABILITY }o--o| CONCEPT : targets
+    
+    SKILL }o--o{ TECHNOLOGY : related
+    TECHNOLOGY }o--o{ CONCEPT : involves
+```
 
-### 3. SkillGraph Relationships (Junction Tables)
--   **Tech_Concept**: `tech_id, concept_id`
--   **Skill_Tech**: `skill_id, tech_id`
--   **Tech_Related**: `tech_id_1, tech_id_2, relation_type`
+### Diagram Explanation
+The ER diagram illustrates the core flow of data:
+1. A **Developer** connects an identity and owns **Repositories**.
+2. A **Repository** undergoes an **Analysis Run**, which produces raw **Observations**.
+3. **Observations** act as the fork in the road: they can produce negative **Risk Findings** (CodeRisk) or contextualized **Evidence**.
+4. **Evidence** is mapped via junction tables to the shared **SkillGraph** taxonomy (Skills, Technologies, Concepts).
+5. The aggregation of Evidence updates a developer's **Capability** state, which maintains a strict **Capability History** for temporal tracking.
 
-### 4. Analysis & Evidence
--   **AnalysisJob**: `id, repository_id, status (QUEUED, MINING, COMPLETED, FAILED), started_at, completed_at`
--   **Observation**: `id, job_id, type, raw_data, location, detected_at`
--   **RiskSignal**: `id, repository_id, observation_id, category, type, severity, confidence, description`
--   **EvidenceItem**: `id, observation_id, target_entity_id, target_entity_type, type, strength, directness, reliability, recency, polarity`
-
-### 5. Capability State
--   **CapabilityState**: `id, developer_id, target_entity_id (Skill/Tech), target_entity_type, score, confidence, trend, last_updated_at`
--   **Capability_Evidence**: `capability_id, evidence_id` (Linking scores directly to evidence for provenance)
--   **CapabilityHistory**: Time-series log of CapabilityState changes for trend analysis.
-
-## Note on Graph Databases
-While a property graph (like Neo4j) is conceptually aligned with the SkillGraph, PostgreSQL provides sufficient capability (via recursive CTEs and junction tables) for the Minor MVP without introducing premature infrastructure complexity.
+## Capability Target Polymorphism
+To cleanly target a Skill, Technology, or Concept from the `developer_capabilities` table without using an unsafe polymorphic foreign key (e.g., `target_id`, `target_type`), the schema uses the **Exclusive Arc** pattern. The table has three nullable foreign keys (`skill_id`, `technology_id`, `concept_id`) with a database-level `CHECK` constraint ensuring exactly one is populated. This preserves hard referential integrity and cascading behaviors.

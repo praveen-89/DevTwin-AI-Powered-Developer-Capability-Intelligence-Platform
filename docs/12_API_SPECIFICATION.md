@@ -3,32 +3,27 @@
 ## Overview
 The backend provides a RESTful API built with FastAPI. It handles synchronous dashboard requests and asynchronous analysis job management.
 
-## Core Endpoints
+## API Resource Mapping (Preparation)
+The following routes map directly to the underlying PostgreSQL domain entities specified in the schema:
 
-### 1. Analysis Pipeline (Asynchronous)
--   `POST /api/v1/analysis`
-    -   *Payload*: `{ "repository_url": "string", "developer_id": "uuid" }`
-    -   *Response*: `{ "job_id": "uuid", "status": "QUEUED" }`
-    -   *Action*: Enqueues a repository for background mining.
--   `GET /api/v1/analysis/{job_id}`
-    -   *Response*: `{ "job_id": "uuid", "status": "MINING", "progress": 45 }`
+### Developer & Capability Resources
+- `GET /developers` - List developers
+- `GET /developers/{id}` - Retrieve developer details
+- `GET /developers/{id}/capabilities` - Fetch `developer_capabilities`
+- `GET /developers/{id}/capabilities/history` - Fetch `capability_history`
+- `GET /developers/{id}/skills/gaps` - Fetch `skill_gaps`
+- `GET /developers/{id}/evidence` - Fetch contextual `evidence` for the developer
 
-### 2. Developer Capability
--   `GET /api/v1/developers/{developer_id}/capabilities`
-    -   *Query*: `?type=SKILL|TECHNOLOGY`
-    -   *Response*: List of `CapabilityState` objects, including score, confidence, and trend.
--   `GET /api/v1/developers/{developer_id}/capabilities/history`
-    -   *Response*: Time-series data for capability trends.
+### Repository & Risk Resources
+- `GET /repositories` - List registered repositories
+- `GET /repositories/{id}` - Retrieve repository metadata
+- `GET /repositories/{id}/risks` - Fetch `risk_findings` for CodeRisk layer
 
-### 3. Evidence Explorer
--   `GET /api/v1/capabilities/{capability_id}/evidence`
-    -   *Response*: List of `EvidenceItem` objects supporting the specific capability score, demonstrating provenance.
+### Analysis Pipeline
+- `POST /analysis` - Queue a new `analysis_runs` record
+- `GET /analysis/{id}` - Poll status of an `analysis_runs` record
 
-### 4. CodeRisk
--   `GET /api/v1/repositories/{repository_id}/risks`
-    -   *Query*: `?category=SECURITY&severity=HIGH`
-    -   *Response*: List of `RiskSignal` objects associated with the repository.
-
-### 5. SkillGraph
--   `GET /api/v1/graph/skills/{skill_id}`
-    -   *Response*: The sub-graph of related concepts and technologies.
+### Taxonomy (SkillGraph)
+- `GET /graph/skills`
+- `GET /graph/technologies`
+- `GET /graph/concepts`
