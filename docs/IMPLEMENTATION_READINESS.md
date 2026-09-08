@@ -2,13 +2,11 @@
 
 ---
 Status: Active
-Version: 1.1
-Last Updated: 2026-09-08
+Version: 1.2
+Last Updated: 2026-09-09
 ---
 
-## Specification Status: FROZEN
-
-This document records the state of the DevTwin specification immediately prior to implementation beginning. All items listed as FROZEN should not be casually changed. Any change requires a formal ADR in `DECISIONS.md`.
+## Milestone v0.1 — COMPLETED: Backend & Supabase Foundation
 
 ---
 
@@ -30,11 +28,29 @@ This document records the state of the DevTwin specification immediately prior t
 | Engineering Rules | `RULES.md` | FROZEN |
 | Agent Protocol | `AGENTS.md` | FROZEN |
 
+---
+
+## IMPLEMENTED (v0.1)
+
+| Area | Status | Location |
+|---|---|---|
+| FastAPI application factory | IMPLEMENTED | `backend/app/main.py` |
+| Settings / configuration validation | IMPLEMENTED | `backend/app/core/config.py` |
+| Structured logging | IMPLEMENTED | `backend/app/core/logging.py` |
+| Async DB connection (SQLAlchemy+asyncpg) | IMPLEMENTED | `backend/app/db/connection.py` |
+| Health endpoint (`GET /health`) | IMPLEMENTED | `backend/app/api/routes/health.py` |
+| DB readiness endpoint (`GET /health/database`) | IMPLEMENTED | `backend/app/api/routes/health.py` |
+| Initial schema migration (all domain tables) | IMPLEMENTED | `database/migrations/001_initial_schema.sql` |
+| RLS policies migration | IMPLEMENTED | `database/migrations/002_rls_policies.sql` |
+| Backend unit tests (health + config) | IMPLEMENTED | `backend/tests/` |
+| `.env.example` with actual required vars | IMPLEMENTED | `.env.example` |
+
+---
+
 ## PENDING Implementation
 
 | Area | Status |
 |---|---|
-| Database migration SQL files | NOT STARTED |
 | GitHub OAuth implementation | NOT STARTED |
 | Repository ingestion | NOT STARTED |
 | Repository mining workers | NOT STARTED |
@@ -42,11 +58,15 @@ This document records the state of the DevTwin specification immediately prior t
 | CodeRisk engine | NOT STARTED |
 | Evidence Engine | NOT STARTED |
 | Capability calculation | NOT STARTED |
-| FastAPI backend | NOT STARTED |
+| Business API endpoints | NOT STARTED |
 | Next.js dashboard | NOT STARTED |
 
-## Next Steps
-The immediate next engineering task is to:
-1. Decide ORM (SQLAlchemy vs SQLModel) — record as ADR.
-2. Write SQL migration files (001-009) based on `docs/11_DATABASE_SCHEMA.md`.
-3. Scaffold FastAPI backend boilerplate.
+---
+
+## Next Milestone
+**v0.2 — GitHub Auth & Repository Registration**
+1. Implement Supabase Auth flow (JWT verification in FastAPI).
+2. Implement `POST /developers/me` (create developer record from auth token).
+3. Implement GitHub OAuth integration (link GitHub account).
+4. Implement `POST /repositories` and `GET /repositories` endpoints.
+5. Write integration tests against a local Supabase instance.
