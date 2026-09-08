@@ -1,6 +1,6 @@
 # DevTwin Domain Model
 
-This document outlines the core business entities for DevTwin. It focuses on the conceptual domain, ownership, lifecycle, and relationships. For the physical PostgreSQL database schema, see `11_DATABASE_SCHEMA.md`.
+*Source of Truth Context: This document defines what the system's concepts and relationships mean.*
 
 ## Core Entities
 
@@ -8,181 +8,91 @@ This document outlines the core business entities for DevTwin. It focuses on the
 *   **Purpose**: The central human actor whose capabilities are being tracked.
 *   **Ownership**: Self-owned.
 *   **Lifecycle**: Created upon signup. Exists indefinitely.
-*   **Relationships**: Has many GitHub Accounts, Projects, Capabilities, and Skill Gaps.
-*   **Important Attributes**: Internal UUID, created timestamp.
+*   **Relationships**: Maps to an external auth identity (`auth_user_id`). Has many GitHub Accounts, Projects, Capabilities, and Skill Gaps.
 *   **Source of Truth**: DevTwin Platform.
-*   **State**: Current state (historical states tracked in other entities).
 
 ### 2. GitHub Account
 *   **Purpose**: Represents an external GitHub identity linked to a Developer.
 *   **Ownership**: Owned by Developer.
-*   **Lifecycle**: Created when a developer links their GitHub.
+*   **Lifecycle**: Created when a developer links their GitHub via OAuth.
 *   **Relationships**: Belongs to Developer.
-*   **Important Attributes**: External GitHub User ID, username.
+*   **Important Attributes**: External GitHub User ID, username. Plaintext tokens are NEVER stored here.
 *   **Source of Truth**: GitHub (mirrored in DevTwin).
-*   **State**: Current state.
 
 ### 3. Project
 *   **Purpose**: A logical grouping of repositories or work associated with a developer.
 *   **Ownership**: Owned by Developer.
-*   **Lifecycle**: Created by Developer.
 *   **Relationships**: Contains Repositories.
-*   **Important Attributes**: Name, description.
-*   **Source of Truth**: DevTwin Platform.
-*   **State**: Current state.
 
 ### 4. Repository
 *   **Purpose**: Represents a tracked codebase containing evidence of engineering work.
 *   **Ownership**: Owned by Project/Developer (for private repos) or tracked publicly.
-*   **Lifecycle**: Tracked when added to DevTwin.
-*   **Relationships**: Belongs to Project. Undergoes many Analysis Runs. Contains Commits, PRs.
+*   **Relationships**: Belongs to Project. Undergoes many Analysis Jobs. Contains Commits, PRs.
 *   **Important Attributes**: GitHub Repo ID, full name, URL, visibility, default branch.
-*   **Source of Truth**: GitHub (mirrored/synced).
-*   **State**: Current metadata (analysis data separated).
 
 ### 5. Repository Language
 *   **Purpose**: Statistics about languages used in a repository.
-*   **Ownership**: Owned by Repository.
-*   **Lifecycle**: Replaced/updated during Analysis Runs.
-*   **Relationships**: Belongs to Repository.
-*   **Important Attributes**: Language name, bytes.
 *   **Source of Truth**: Analysis Run (Linguist/Enry).
-*   **State**: Current state per repository.
 
 ### 6. Repository Dependency
 *   **Purpose**: Tracked software dependencies (e.g., npm packages, pip packages).
-*   **Ownership**: Owned by Repository.
-*   **Lifecycle**: Updated during Analysis Runs.
-*   **Relationships**: Belongs to Repository. Maps to Technologies in SkillGraph.
-*   **Important Attributes**: Ecosystem, package name, version constraint.
 *   **Source of Truth**: Analysis Run (Dependency manifest parsing).
-*   **State**: Current state per repository.
 
 ### 7. Commit
-*   **Purpose**: A unit of version-controlled work.
-*   **Ownership**: Owned by Repository. Attributed to Author (Developer).
-*   **Lifecycle**: Immutable once extracted from Git.
-*   **Relationships**: Belongs to Repository. May trigger Risk Findings or Evidence.
+*   **Purpose**: A unit of version-controlled work. Essential for accurate CodeRisk attribution.
 *   **Important Attributes**: SHA, author email, timestamp, message.
 *   **Source of Truth**: Git History.
-*   **State**: Historical/Immutable.
 
 ### 8. Pull Request
-*   **Purpose**: A unit of collaboration and peer review.
-*   **Ownership**: Owned by Repository.
-*   **Lifecycle**: Open -> Merged/Closed.
-*   **Relationships**: Belongs to Repository.
-*   **Important Attributes**: PR number, state, timestamps.
+*   **Purpose**: A unit of collaboration and peer review. Used as evidence of communication/code review capabilities.
+*   **Important Attributes**: PR number, author, state, timestamps, GitHub PR ID.
 *   **Source of Truth**: GitHub.
-*   **State**: Current state (syncs over time).
 
 ### 9. Analysis Job
-*   **Purpose**: Represents the queueing and scheduling request for an analysis.
-*   **Ownership**: System-owned.
-*   **Lifecycle**: QUEUED -> IN_PROGRESS -> COMPLETED/FAILED.
-*   **Relationships**: Triggers Analysis Run.
-*   **Important Attributes**: Priority, queued timestamp.
-*   **Source of Truth**: DevTwin Queue.
-*   **State**: Ephemeral/Current.
+*   **Purpose**: Represents the user/system request to analyze a repository.
+*   **Lifecycle**: QUEUED -> PROCESSING -> COMPLETED/FAILED.
+*   **Relationships**: Contains one or more Analysis Runs (attempts).
+*   **Important Attributes**: Status, requested_at, attempt_count.
 
 ### 10. Analysis Run
-*   **Purpose**: Represents a specific, bounded execution of the analysis pipeline on a repository.
-*   **Ownership**: System-owned (linked to Repository).
-*   **Lifecycle**: Created upon job execution. Finalizes upon completion/failure.
-*   **Relationships**: Belongs to Repository. Generates Observations, Risk Findings.
+*   **Purpose**: Represents a specific, bounded execution attempt of an Analysis Job on a repository.
+*   **Lifecycle**: QUEUED -> FETCHING -> MINING -> SKILL_GRAPH -> CODE_RISK -> CAPABILITY -> COMPLETED (or FAILED).
+*   **Relationships**: Belongs to an Analysis Job. Generates Observations, Risk Findings.
 *   **Important Attributes**: Status, analyzer version, schema version, error info, timestamps.
-*   **Source of Truth**: DevTwin Analysis Engine.
-*   **State**: Historical/Immutable once completed.
 
 ### 11. Observation
-*   **Purpose**: A directly detected, factual finding from an Analysis Run.
-*   **Ownership**: Owned by Analysis Run.
-*   **Lifecycle**: Created during an Analysis Run. Immutable.
-*   **Relationships**: Belongs to Analysis Run. Translates into Evidence or Risk Findings.
-*   **Important Attributes**: Source tool, source reference (file/line), raw data.
+*   **Purpose**: A directly detected, factual finding from an Analysis Run (e.g., "Dependency React found").
 *   **Source of Truth**: DevTwin Analysis Engine.
-*   **State**: Historical/Immutable.
 
 ### 12. Evidence
-*   **Purpose**: Contextualized support for a capability or technical inference, derived from Observations.
-*   **Ownership**: Developer-associated.
-*   **Lifecycle**: Created based on Observations.
-*   **Relationships**: Supported by Observations. Maps to Skills/Technologies/Concepts. Supports Capabilities.
-*   **Important Attributes**: Type (MENTION, USAGE, etc.), strength, directness, reliability, recency, polarity.
-*   **Source of Truth**: DevTwin Evidence Engine.
-*   **State**: Historical/Immutable.
+*   **Purpose**: Contextualized interpretation of an Observation, supporting a capability inference.
+*   **Relationships**: Supported by Observations. Maps to Taxonomy. Supports Capabilities.
 
-### 13. Skill
+### 13. Skill (Taxonomy)
 *   **Purpose**: Broad competency area (e.g., "Backend Development").
-*   **Ownership**: System-owned (Taxonomy).
-*   **Lifecycle**: Managed globally by DevTwin.
-*   **Relationships**: Related to other Skills. Includes Technologies and Concepts.
-*   **Important Attributes**: Name, domain.
-*   **Source of Truth**: DevTwin Taxonomy.
-*   **State**: Current state.
 
-### 14. Technology
+### 14. Technology (Taxonomy)
 *   **Purpose**: Concrete implementation tool/framework (e.g., "FastAPI").
-*   **Ownership**: System-owned (Taxonomy).
-*   **Lifecycle**: Managed globally.
-*   **Relationships**: Part of Skills. Involves Concepts.
-*   **Important Attributes**: Name, type.
-*   **Source of Truth**: DevTwin Taxonomy.
-*   **State**: Current state.
 
-### 15. Concept
+### 15. Concept (Taxonomy)
 *   **Purpose**: Underlying technical theory (e.g., "REST API").
-*   **Ownership**: System-owned (Taxonomy).
-*   **Lifecycle**: Managed globally.
-*   **Relationships**: Part of Skills. Involved in Technologies.
-*   **Important Attributes**: Name.
-*   **Source of Truth**: DevTwin Taxonomy.
-*   **State**: Current state.
 
 ### 16. Skill Relationship
-*   **Purpose**: Represents directed edges between nodes in the SkillGraph (e.g., React REQUIRES JavaScript).
-*   **Ownership**: System-owned (Taxonomy).
-*   **Lifecycle**: Managed globally.
-*   **Relationships**: Connects Taxonomy nodes.
-*   **Important Attributes**: Relation type (REQUIRES, RELATED_TO, PART_OF).
-*   **Source of Truth**: DevTwin Taxonomy.
-*   **State**: Current state.
+*   **Purpose**: Represents relational mapping between taxonomy nodes (e.g., React REQUIRES JavaScript). Note: This is an internal taxonomy relationship, separate from developer evidence edges.
 
 ### 17. Developer Capability
 *   **Purpose**: The calculated, current inferred capability of a developer for a specific target.
-*   **Ownership**: Owned by Developer.
-*   **Lifecycle**: Continuously updated as new Evidence arrives.
-*   **Relationships**: Belongs to Developer. Targets exactly one Skill, Tech, or Concept. Supported by Evidence.
-*   **Important Attributes**: Score, confidence, model version.
-*   **Source of Truth**: DevTwin Capability Engine.
-*   **State**: Current state (Latest calculation).
+*   **Relationships**: Targets EXACTLY ONE Skill, Tech, or Concept (Exclusive Arc). Supported by Evidence.
 
 ### 18. Capability History
-*   **Purpose**: Temporal, immutable log of previous Capability states.
-*   **Ownership**: Owned by Developer Capability.
-*   **Lifecycle**: Appended whenever a Capability updates.
-*   **Relationships**: Belongs to Developer Capability. Linked to Analysis Run.
-*   **Important Attributes**: Historical score, historical confidence, timestamp, model version.
-*   **Source of Truth**: DevTwin Capability Engine.
-*   **State**: Historical/Immutable.
+*   **Purpose**: Temporal, immutable, append-only log of previous Capability states. Do NOT overwrite.
 
 ### 19. Skill Gap
 *   **Purpose**: The delta between a required capability target and the developer's current capability.
-*   **Ownership**: Owned by Developer.
-*   **Lifecycle**: Recalculated dynamically or periodically.
-*   **Relationships**: Belongs to Developer. Targets exactly one Skill, Tech, or Concept.
-*   **Important Attributes**: Target score, current score, gap value, confidence.
-*   **Source of Truth**: DevTwin Capability Engine.
-*   **State**: Current state.
 
 ### 20. Risk Finding
 *   **Purpose**: A CodeRisk signal detected in a repository.
-*   **Ownership**: Owned by Repository. (Optionally attributed to a commit/developer).
-*   **Lifecycle**: Generated during Analysis Runs.
-*   **Relationships**: Belongs to Repository, Analysis Run, Observation. Optionally linked to Commit.
-*   **Important Attributes**: Category (SECURITY, MAINTAINABILITY, etc.), severity, confidence, risk type.
-*   **Source of Truth**: CodeRisk Engine.
-*   **State**: Current and Historical (tied to runs).
+*   **Crucial Rule**: **Risk ≠ Competence**. A risk finding is *evidence* about engineering behavior. If attributed to a specific developer via Git history, it acts as a signal in the capability model. It does not automatically label the developer incompetent.
 
 ## Crucial Conceptual Distinctions
 

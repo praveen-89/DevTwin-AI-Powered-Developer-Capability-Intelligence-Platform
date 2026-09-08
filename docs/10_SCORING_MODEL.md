@@ -1,51 +1,45 @@
 # 10. Scoring Model
 
-## Design Philosophy
-DevTwin explicitly **rejects** arbitrary fixed weights (e.g., Knowledge = 20%, Application = 30%). Capability is treated as a latent state inferred from heterogeneous evidence.
+*Source of Truth Context: Scoring methodology for the Capability Engine.*
 
-## Initial Evidence Contribution
-The weight of a single piece of evidence ($w_i$) is calculated dynamically based on the properties of the `EvidenceItem`:
+## Design Philosophy
+DevTwin explicitly **rejects** arbitrary fixed weights (e.g., Knowledge = 20%, Application = 30%). Capability is treated as a latent state inferred from heterogeneous evidence. The model must be interpretable, reproducible, and version-tracked.
+
+**This model is NOT scientifically validated. It is a calibration starting point. The architecture ensures it can be tuned or replaced without breaking the system.**
+
+## Evidence Weight Calculation
+The weight of a single piece of evidence ($w_i$) is calculated dynamically:
 
 $$w_i = S_i \times D_i \times R_i \times T_i \times P_i$$
 
 Where:
--   **S (Strength)**: Based on the evidence hierarchy (Mention vs. Usage vs. Outcome).
+-   **S (Strength)**: Based on evidence hierarchy (MENTION=0.2, USAGE=0.5, APPLIED\_ENGINEERING=0.8, DEMONSTRATED\_OUTCOME=1.0).
 -   **D (Directness)**: How closely the evidence links to the specific capability being scored.
--   **R (Reliability)**: The trustworthiness of the source.
--   **T (Temporal/Recency)**: A decay factor based on how old the evidence is.
--   **P (Polarity)**: Positive (supporting capability) or negative (highlighting a gap/risk).
+-   **R (Reliability)**: The trustworthiness of the source tool.
+-   **T (Temporal/Recency)**: A decay factor based on how old the evidence is (recent evidence has higher weight).
+-   **P (Polarity)**: +1 for positive engineering signals, negative for risks/anti-patterns. **Negative polarity evidence does NOT eliminate positive evidence — it reduces the aggregate weight.**
 
 ## Capability Scoring Function (Minor v1)
-For the Minor MVP, an interpretable normalized scoring function is used to aggregate evidence into a capability score ($C$) for a developer ($d$) and skill ($s$):
+An interpretable normalized scoring function aggregates evidence into a capability score ($C$) for a developer ($d$) and target ($s$):
 
 $$C(d,s) = \sigma\left(\frac{\sum w_i}{Z}\right)$$
 
 Where:
 -   $\sigma$ is the sigmoid function to bound the score between 0 and 1.
--   $Z$ is a normalization constant (which can be calibrated later).
+-   $Z$ is a normalization constant (to be calibrated once real evidence data is available).
+-   `scoring_version` must be stored alongside every score for reproducibility.
 
-*Note: This is a calibration starting point, NOT a scientifically proven universal formula. The system architecture ensures this model can be tuned or replaced later.*
+## Confidence Score (Independent of Capability Score)
+Confidence is calculated independently. **A developer can have High Score + Low Confidence, or Moderate Score + High Confidence.**
 
-## Confidence Score
-Confidence is calculated independently of the capability score. It represents the system's certainty:
+$$Confidence = f(\text{evidence quantity}, \text{evidence diversity}, \text{recency}, \text{consistency})$$
 
-$$Confidence = f(\text{quality, diversity, consistency, recency, evidence quantity})$$
+## Temporal Updates
+When new evidence arrives after a new analysis run, the existing capability is re-evaluated:
+*   Updated score is stored in `developer_capabilities`.
+*   The previous state is appended immutably to `capability_history`.
 
-## Temporal Capability Updates
-Capability is not static. When new evidence ($E(t+1)$) arrives, the state is updated:
-
-$$C(t+1) = Update(C(t), E(t+1))$$
-
-The trend can be calculated as:
-
-$$Trend = C(t) - C(t-k)$$
-
-## Skill Gap Identification
-The skill gap is conceptually modeled as:
-
+## Skill Gap
 $$Gap(d,s) = Target(s) - Capability(d,s)$$
 
-**Crucial Caveat:** A low capability score does *not* automatically mean the developer lacks the skill. It may simply mean a lack of evidence. The UI must clearly distinguish between:
--   **Observed** (Evidence exists to support a score)
--   **Inferred** (Score derived from related skills in the SkillGraph)
--   **Uncertain** (Insufficient evidence to make a claim)
+A low Gap score must be qualified by confidence. **A low-confidence gap must be visually distinguishable from a high-confidence gap in the UI.**

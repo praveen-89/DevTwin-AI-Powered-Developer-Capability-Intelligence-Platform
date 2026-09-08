@@ -1,29 +1,29 @@
 # 06. Capability Model
 
-## Skill vs. Capability
-The fundamental premise of DevTwin's capability model is the explicit distinction between Skill and Capability.
+*Source of Truth Context: Domain-level specification of capability semantics.*
 
-*   **Skill (or Technology):** A specific tool, language, or concept (e.g., "Python", "Docker", "REST API").
-*   **Capability:** The demonstrated ability to effectively utilize a skill in real software projects.
+## Core Distinction: Skill ≠ Capability
+**A Skill is a named competency. A Capability is a developer-specific, evidence-backed, scored measure of how well they demonstrate that competency.**
 
-## Components of a Capability State
-A developer's capability is not a single number, but a multi-dimensional state. The model considers the following dimensions:
+*   **Skill** (or Technology, Concept): A specific tool, language, or concept in the SkillGraph taxonomy (e.g., "Python", "Docker", "REST API"). Shared globally.
+*   **Capability**: The demonstrated ability of a *specific developer* to effectively utilize a skill, inferred from verifiable repository evidence. Developer-specific.
 
-1.  **Technical Knowledge:** Evidence that the developer understands the syntax, APIs, and basic concepts of a technology.
-2.  **Practical Application:** Evidence of the technology being used to build functional software components.
-3.  **Engineering Capability:** The quality, safety, and maintainability of the application (informed by CodeRisk).
-4.  **Project Experience:** The context in which the technology was used (e.g., a simple script vs. a production-grade microservice).
-5.  **Engineering Behavior:** Consistent patterns of work, such as writing tests, managing dependencies, and structuring code.
+## Capability Model Principle: Risk ≠ Competence
+**Risk signals are evidence about engineering behavior, not direct proof of incompetence.** When a CodeRisk finding is attributable to a developer, it acts as a negative evidence signal in the Capability Engine — its weight depends on severity, directness, and recency. It does not unilaterally override other positive evidence.
 
-## The Capability State Object
-A capability state for a specific developer and skill contains:
-- `capability_score`: The inferred level of capability (e.g., 0.0 to 1.0).
-- `confidence`: The system's confidence in the score (based on evidence volume and diversity).
-- `evidence`: A linked list of `EvidenceItem` objects supporting the score.
-- `recency`: When the capability was last demonstrated.
-- `trend`: The trajectory of the capability over time (e.g., improving, decaying).
-- `historical_state`: A timeline of past capability states.
+## Capability State Object
+A capability state for a specific developer and target contains:
+- `score` (0.0 - 1.0): The inferred level of demonstrated capability.
+- `confidence` (0.0 - 1.0): The system's certainty in the score (based on evidence volume, diversity, and consistency). **Score and Confidence are separate dimensions.**
+- `evidence_ids`: A linked list of `evidence` records supporting the score.
+- `scoring_version`: The model version used to produce this score.
+- `historical_state`: Stored immutably in `capability_history`.
+
+## Capability Evidence States
+The UI must clearly distinguish between:
+*   **Observed**: Evidence directly extracted from the developer's code.
+*   **Inferred**: Score derived from related skills in the SkillGraph traversal.
+*   **Uncertain**: Insufficient evidence to make a confident claim.
 
 ## Conceptual Flow
-The process of determining a capability state:
-`Knowledge + Practical Application + Engineering Behavior + Project Experience + Consistency/Recency + Outcomes -> Developer Capability`
+`Knowledge Evidence + Application Evidence + Engineering Behavior Evidence + Risk Evidence (negative) → Aggregated Weighted Score → Capability + Confidence`

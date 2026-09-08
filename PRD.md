@@ -1,11 +1,13 @@
 ---
 Status: Active
-Version: 1.0
+Version: 1.1
 Last Updated: 2026-09-08
 Source of Truth: PRD.md
 ---
 
 # Product Requirements Document (PRD)
+
+*Source of Truth Context: This document defines what the product should accomplish and why.*
 
 ## Product Identity
 *   **Product Name**: DevTwin
@@ -43,9 +45,14 @@ DevTwin is explicitly **NOT**:
 ## Core Intelligence Loop
 `Capability -> Engineering Behavior -> Risk -> Skill Gap -> Learning Intervention -> Outcome -> Updated Capability`
 
+## Capability Model Principle (Risk ≠ Competence)
+**Risk is evidence about engineering behavior, not direct proof of developer incompetence.** 
+If an engineering risk is observed (e.g., hardcoded secret), it is processed as negative evidence for specific capabilities (e.g., Security). It does *not* mean the developer lacks competence outright. The capability estimate weighs this negative evidence against positive evidence, considering context, recency, and directness.
+
 ## Minor Scope (Developer Capability Intelligence Foundation)
-The Minor MVP focuses exclusively on establishing the foundational assessment engine:
+The Minor MVP focuses exclusively on establishing the foundational assessment engine using **GitHub OAuth + Repository Selection**:
 `GitHub -> Repository Discovery -> Repository Mining -> SkillGraph + CodeRisk -> Evidence -> Capability Model -> Skill Gap -> Dashboard`
+*(Note: Public repository URL ingestion without OAuth is explicitly excluded from the Minor MVP).*
 
 ## Major Scope (Future)
 Future functionality includes **StudyTwin**, which closes the loop:
@@ -54,13 +61,14 @@ Future functionality includes **StudyTwin**, which closes the loop:
 *   Intervention tracking
 *   Outcome measurement
 *   Capability prediction
-*   Future simulation
+*   Adaptive learning
+*   What-if analysis
 
 ## Functional Requirements
-*   **FR-001**: System must ingest GitHub repositories via URL or integration.
-*   **FR-002**: System must execute asynchronous analysis runs without blocking the UI.
+*   **FR-001**: System must ingest selected GitHub repositories via GitHub OAuth.
+*   **FR-002**: System must execute asynchronous Analysis Jobs containing multiple Analysis Runs without blocking the UI.
 *   **FR-003**: System must extract dependencies and languages from repositories.
-*   **FR-004**: System must execute CodeRisk static analysis heuristics.
+*   **FR-004**: System must execute CodeRisk static analysis heuristics without false attribution of blame.
 *   **FR-005**: System must map observations to the SkillGraph taxonomy.
 *   **FR-006**: System must generate Evidence from Observations, assigning strength and polarity.
 *   **FR-007**: System must calculate Capability scores and Confidence metrics.
@@ -70,15 +78,15 @@ Future functionality includes **StudyTwin**, which closes the loop:
 
 ## Non-Functional Requirements
 *   **Explainability**: Every capability score must trace back to raw observations.
-*   **Security**: Minimal OAuth scopes, external secrets management, strict RLS database boundaries.
+*   **Security**: Minimal OAuth scopes, external secrets management, strict RLS database boundaries. Never store plaintext GitHub access tokens.
 *   **Privacy**: Developer A cannot access Developer B's private repository data or capability scores.
-*   **Reliability**: Failed analysis jobs must not corrupt existing capability history.
-*   **Performance**: The dashboard must load developer capabilities in < 500ms; analysis runs may take minutes asynchronously.
+*   **Reliability**: Failed analysis runs must not corrupt existing capability history. Jobs must support retries.
+*   **Performance**: The dashboard must load developer capabilities quickly; analysis runs may take minutes asynchronously.
 
 ## Acceptance Criteria
-1.  A developer can connect a repository, and within 5 minutes, see an updated SkillGraph.
+1.  A developer can connect a repository via OAuth, and within 5 minutes, see an updated SkillGraph.
 2.  The UI explicitly distinguishes between a "Low Capability Score" and "Low Confidence."
-3.  A risk finding (e.g., hardcoded secret) reduces the relevant capability score (e.g., Security) and is logged as negative evidence.
+3.  A risk finding (e.g., hardcoded secret) reduces the relevant capability score (e.g., Security) and is logged as negative evidence, but does not wipe out competence.
 
 ## Future Scope
 *   GitLab/Bitbucket integrations.

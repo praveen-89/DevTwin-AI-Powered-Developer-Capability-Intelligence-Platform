@@ -55,19 +55,24 @@ The Major roadmap will extend the platform to include the StudyTwin layer, featu
 - **Code Analysis**: Custom analyzers, CodeQL / static-analysis tools
 
 ## Repository Structure
-- `docs/` - System architecture and specifications
-- `backend/` - FastAPI backend services
-- `frontend/` - Next.js frontend application
-- `workers/` - Background job processing
-- `database/` - Database schemas and migrations
-- `scripts/` - Utility scripts
-- `tests/` - Test suites
+- `docs/` - Canonical technical specifications (Domain Model, DB Schema, API Contracts, Pipeline)
+- `backend/` - (Pending) FastAPI backend services
+- `frontend/` - (Pending) Next.js frontend application
+- `workers/` - (Pending) Background Python analysis workers
+- `database/` - (Pending) SQL migration files
+- `scripts/` - (Pending) Utility scripts
+- `tests/` - (Pending) Test suites
 
 ## Development Philosophy
 - The repository documentation is the source of truth.
 - AI is an intelligence layer, NOT the entire product.
 - Evidence-backed: Every capability estimate must be supported by evidence.
 - Interpretable: The system must remain interpretable and manageable.
+- **Risk ≠ Competence**: CodeRisk findings are evidence signals, not blame verdicts.
 
 ## Current Project Status
-Phase 1: Project Initialization, Architecture Documentation, and Repository Structure.
+**Stage**: Architecture & Specification Freeze
+**Implementation**: Not Started
+**Status**: Research + System Design + Implementation Preparation
+
+The full architectural specification is frozen. See `docs/IMPLEMENTATION_READINESS.md` for the complete status of each component.

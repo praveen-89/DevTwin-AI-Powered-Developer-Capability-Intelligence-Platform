@@ -1,38 +1,22 @@
-# 09. Evidence Model
+# 9. Evidence Model
 
 ## Overview
-The foundational rule of DevTwin is: **Every capability estimate must be supported by evidence.**
+The Evidence Model sits between raw Observations and the final Capability Score. It translates immutable facts into contextualized signals.
 
-## Observation vs. Evidence
-The system distinguishes between an raw observation and contextualized evidence:
--   **Observation**: A directly detected fact (e.g., "A file named Dockerfile exists in Repo A").
--   **Evidence**: A contextualized interpretation of an observation related to a capability (e.g., "Developer demonstrates usage of Docker technology").
+## Risk as Evidence
+**Risk is evidence about engineering behavior, not direct proof of developer incompetence.**
+When a `risk_finding` is attributed to a developer, it acts as a negative observation. The Evidence Engine interprets it as negative polarity evidence, which slightly pulls down the capability score and affects confidence, depending on the severity and recency.
 
-*Pipeline:*
-`RAW EVIDENCE -> OBSERVATION -> FEATURE -> CAPABILITY ESTIMATE -> CONFIDENCE -> EXPLANATION`
+## The Evidence Hierarchy
+1.  **MENTION** (Lowest Strength): E.g., The developer mentions "React" in a README.
+2.  **USAGE**: E.g., The developer imports `React` in a file.
+3.  **APPLIED_ENGINEERING**: E.g., The developer implements a complex custom React Hook.
+4.  **DEMONSTRATED_OUTCOME** (Highest Strength): E.g., The developer's PR fixing a critical React rendering bug is merged.
 
-## Evidence Hierarchy
-Not all evidence is equal. The system weights evidence based on its depth and context:
-1.  **Mention (Weakest)**: A skill is listed in a README or a bio.
-2.  **Usage (Stronger)**: A technology is present in a `package.json` or imported in a file.
-3.  **Applied Engineering (Strong)**: Complex usage, custom configurations, architectural patterns (e.g., writing a custom Webpack config, not just running `create-react-app`).
-4.  **Demonstrated Outcome (Strongest)**: The code runs in production, passes CI/CD, receives positive peer reviews, or resolves complex issues.
-
-## Evidence Object Structure
-```json
-{
-    "id": "uuid",
-    "source": "REPOSITORY_MINING", // e.g., GitHub profile, source code, commits, issues
-    "type": "APPLIED_ENGINEERING",
-    "strength": 0.8, // Base weight based on hierarchy
-    "directness": 0.9, // How directly it relates to the target capability
-    "reliability": 0.95, // Confidence in the source of the observation
-    "recency": "timestamp", // Used for temporal weighting
-    "corroboration": ["evidence_id_1", "evidence_id_2"], // Links to supporting evidence
-    "polarity": 1.0, // Positive (demonstrates capability) or Negative (CodeRisk finding)
-    "target": "technology_docker_id"
-}
-```
-
-## Provenance
-Evidence must maintain provenance wherever possible. A capability score shown on the dashboard must be clickable, tracing back through the `EvidenceItem` to the original `Observation` and ideally the specific file or commit in the repository.
+## Attributes
+*   **Type**: MENTION | USAGE | APPLIED_ENGINEERING | DEMONSTRATED_OUTCOME
+*   **Strength** (0-1): The base weight of the evidence type.
+*   **Directness** (0-1): How directly the evidence applies to the target concept.
+*   **Reliability** (0-1): Trust in the source tool extracting the observation.
+*   **Recency** (0-1): Decays over time (e.g., code written 3 years ago is less relevant today).
+*   **Polarity** (-1 to 1): Positive for good engineering, negative for risks/anti-patterns.
