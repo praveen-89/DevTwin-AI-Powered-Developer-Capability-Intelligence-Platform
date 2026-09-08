@@ -2,7 +2,7 @@
 
 **DevTwin — AI-Powered Developer Capability Intelligence Platform**
 
-Development Stage: System Specification / Foundation
+Development Stage: Implementation-Ready System Specification
 
 ## Problem
 Current methods for evaluating developer capability rely on static resumes, generic GitHub dashboards, or simple code assessments. These fail to capture the true, evolving nature of a developer's technical knowledge, practical application, and engineering behavior over time. They lack evidence-backed explanations and do not account for engineering risks or contextual application of skills.

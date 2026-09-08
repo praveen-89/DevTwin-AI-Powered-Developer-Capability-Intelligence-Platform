@@ -10,27 +10,58 @@ Whenever implementation later changes an architectural decision:
 
 ## Log
 
-### [Date: 2026-09-08] - Initial System Specification
--   **Decision**: Adopted a relational database (PostgreSQL) instead of a graph database (Neo4j) for the Minor MVP.
--   **Rationale**: To reduce infrastructure complexity while building the foundation. The relational schema is designed with junction tables to simulate graph traversal for the SkillGraph.
--   **Status**: Accepted.
+### Decision: Relational Database over Graph DB
+*   **Context**: The SkillGraph inherently models nodes and edges.
+*   **Options**: 1) Neo4j, 2) PostgreSQL, 3) ArangoDB.
+*   **Chosen Approach**: PostgreSQL.
+*   **Reason**: DevTwin Minor needs to establish the data foundation without over-engineering or requiring specialized DB ops. PostgreSQL handles junctions and recursive queries well enough for the MVP scope.
+*   **Consequences**: Graph traversals are simulated via JOINs and recursive CTEs.
 
-### [Date: 2026-09-08] - Pipeline Architecture
--   **Decision**: Repository mining must occur in background workers, decoupled from HTTP requests.
--   **Rationale**: Repository fetching and AST parsing are I/O and CPU bound, which would cause API timeouts and poor UX if handled synchronously.
--   **Status**: Accepted.
+### Decision: Internal vs. External Identifiers
+*   **Context**: DevTwin interacts with GitHub, which provides its own immutable IDs.
+*   **Options**: 1) Use GitHub IDs as primary keys, 2) Auto-incrementing integers, 3) Internal UUIDv4.
+*   **Chosen Approach**: Internal UUIDv4 for PKs. Separate `github_id` columns.
+*   **Reason**: Decouples the core identity system from GitHub, allowing future extensibility (GitLab, Bitbucket) and preventing collisions.
+*   **Consequences**: Requires mapping lookups when syncing data from GitHub webhooks.
 
-### [Date: 2026-09-08] - AI Philosophy Boundary
--   **Decision**: Prohibit LLMs from directly generating capability scores from raw repository data.
--   **Rationale**: Ensures the system remains explainable and strictly adheres to the "No score without evidence" rule. LLMs are restricted to explanation generation and semantic mapping.
--   **Status**: Accepted.
+### Decision: Observation vs. Evidence Separation
+*   **Context**: Analysis generates raw facts, which then imply capability.
+*   **Options**: 1) Single `evidence` table, 2) Split `observations` (facts) and `evidence` (contextualized facts).
+*   **Chosen Approach**: Split models.
+*   **Reason**: Separation of concerns. An Observation (e.g., "Found Dockerfile") is immutable. Evidence ("Developer applied Containerization, strength 0.8") is an interpretation that might change if the scoring model updates.
+*   **Consequences**: Slightly more complex pipeline (Mining -> Observation -> Evidence Engine -> Evidence).
 
-### [Date: 2026-09-08] - Capability Target Polymorphism
--   **Decision**: Use the "Exclusive Arc" pattern (multiple nullable foreign keys with a CHECK constraint) instead of a generic `(target_id, target_type)` for `developer_capabilities`. Use junction tables for `evidence` targets.
--   **Rationale**: Preserves database-level referential integrity. Generic polymorphic foreign keys prevent the use of true database foreign key constraints, leading to orphaned records.
--   **Status**: Accepted.
+### Decision: Capability History
+*   **Context**: Need to track how a developer improves.
+*   **Options**: 1) Update score in place, 2) Append-only history table.
+*   **Chosen Approach**: Append-only `capability_history` table linked to `developer_capabilities` (current state).
+*   **Reason**: Enables temporal trend analysis, visualization of skill gaps over time, and reproducible audits.
+*   **Consequences**: Database storage will grow proportionally to the number of analysis runs over time.
 
-### [Date: 2026-09-08] - State Tracking Enums
--   **Decision**: Use PostgreSQL ENUM types for `analysis_status`, `evidence_type`, `risk_category`, and `risk_severity`.
--   **Rationale**: Enforces strict typing at the database level, preventing invalid state insertions without relying solely on application-level validation.
--   **Status**: Accepted.
+### Decision: Capability Target Strategy
+*   **Context**: Capabilities can target a Skill, Technology, or Concept.
+*   **Options**: 1) Polymorphic FK (`target_id`, `target_type`), 2) Separate tables, 3) Exclusive Arc (multiple nullable FKs).
+*   **Chosen Approach**: Exclusive Arc (nullable `skill_id`, `technology_id`, `concept_id` with `CHECK` constraint).
+*   **Reason**: Preserves database-level referential integrity and cascading deletes, which option 1 breaks.
+*   **Consequences**: Slightly wider table, strict `CHECK` constraint required.
+
+### Decision: Asynchronous Analysis Runs
+*   **Context**: Repository mining takes minutes.
+*   **Options**: 1) Inline HTTP processing, 2) Background jobs with state tracking.
+*   **Chosen Approach**: `analysis_jobs` and `analysis_runs` tables with explicit ENUM states.
+*   **Reason**: Prevents API timeouts, enables reproducible runs, and handles failure gracefully.
+*   **Consequences**: Requires a Redis/Worker architecture.
+
+### Decision: Row Level Security (RLS) Approach
+*   **Context**: Protecting developer privacy.
+*   **Options**: 1) Application-level checks, 2) Database RLS.
+*   **Chosen Approach**: Database RLS using Supabase conventions.
+*   **Reason**: Defense in depth. Ensures a developer can only query records tracing back to their `developer_id`.
+*   **Consequences**: Requires complex RLS policies for deep relationships (e.g., viewing `risk_findings` requires joining through `repositories` and `projects`).
+
+### Decision: Delaying SQL Migrations
+*   **Context**: The database specification is complete, but SQL files are not written.
+*   **Options**: 1) Write migrations now, 2) Wait for next phase.
+*   **Chosen Approach**: Wait.
+*   **Reason**: The specification must be reviewed before committing to SQL syntax, ensuring the ORM choice (SQLAlchemy vs Prisma vs Raw SQL) dictates how migrations are physically generated.
+*   **Consequences**: The repository remains conceptually complete but requires an implementation step before code runs.

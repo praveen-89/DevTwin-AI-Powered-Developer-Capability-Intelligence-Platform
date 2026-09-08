@@ -1,276 +1,193 @@
-# Domain Model & Database Specification
+# DevTwin Domain Model
 
-## Overview
-This document specifies the implementation-ready domain model and PostgreSQL database schema for the DevTwin platform. It details all tables, columns, constraints, and relationships required to support the Developer Twin capability intelligence loop.
-
-## Identifiers Strategy
-**Primary Keys**: UUIDv4 is used for all internal primary keys. 
-**Reasoning**: UUIDs allow for decentralized ID generation, prevent enumeration attacks, and simplify data merging across potential future shards or microservices. 
-**External IDs**: External identifiers (like GitHub User ID or Repository ID) are stored in dedicated columns (e.g., `github_id BIGINT`) but are NEVER used as internal primary keys. This decouples DevTwin from a single provider, allowing future integrations (e.g., GitLab, Bitbucket) without breaking the core schema.
-
-## Capability Target Design (Polymorphic Avoidance)
-To associate a `DeveloperCapability` or `SkillGap` with a target entity (Skill, Technology, or Concept), we avoid anti-patterns like `(target_id, target_type)`. 
-**Decision**: We use the **Exclusive Arc** pattern. The table contains separate nullable foreign keys (`skill_id`, `technology_id`, `concept_id`) with a `CHECK` constraint ensuring exactly *one* is non-null. This guarantees database-level referential integrity and cascading deletes.
-For `Evidence`, the design uses explicit junction tables (`evidence_skills`, etc.) to allow one evidence item to potentially support multiple targets.
+This document outlines the core business entities for DevTwin. It focuses on the conceptual domain, ownership, lifecycle, and relationships. For the physical PostgreSQL database schema, see `11_DATABASE_SCHEMA.md`.
 
 ## Core Entities
 
-### 1. Identity & Projects
+### 1. Developer
+*   **Purpose**: The central human actor whose capabilities are being tracked.
+*   **Ownership**: Self-owned.
+*   **Lifecycle**: Created upon signup. Exists indefinitely.
+*   **Relationships**: Has many GitHub Accounts, Projects, Capabilities, and Skill Gaps.
+*   **Important Attributes**: Internal UUID, created timestamp.
+*   **Source of Truth**: DevTwin Platform.
+*   **State**: Current state (historical states tracked in other entities).
 
-**`developers`**
-Purpose: The core identity representing a human developer in the system.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| created_at | timestamptz | NO | DEFAULT now() | Record creation time |
-| updated_at | timestamptz | NO | DEFAULT now() | Last update time |
+### 2. GitHub Account
+*   **Purpose**: Represents an external GitHub identity linked to a Developer.
+*   **Ownership**: Owned by Developer.
+*   **Lifecycle**: Created when a developer links their GitHub.
+*   **Relationships**: Belongs to Developer.
+*   **Important Attributes**: External GitHub User ID, username.
+*   **Source of Truth**: GitHub (mirrored in DevTwin).
+*   **State**: Current state.
 
-**`github_accounts`**
-Purpose: Stores GitHub-specific integration details for a developer. Secrets are handled externally or encrypted.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| developer_id | uuid | NO | FK(developers.id) | Owning developer |
-| github_id | bigint | NO | UNIQUE | External GitHub user ID |
-| username | text | NO | | GitHub login username |
-| avatar_url | text | YES | | URL to GitHub avatar |
-| access_token_enc | text | YES | | Encrypted OAuth token (never plaintext) |
-| created_at | timestamptz | NO | DEFAULT now() | Record creation time |
+### 3. Project
+*   **Purpose**: A logical grouping of repositories or work associated with a developer.
+*   **Ownership**: Owned by Developer.
+*   **Lifecycle**: Created by Developer.
+*   **Relationships**: Contains Repositories.
+*   **Important Attributes**: Name, description.
+*   **Source of Truth**: DevTwin Platform.
+*   **State**: Current state.
 
-**`projects`**
-Purpose: Logical grouping of repositories or work associated with a developer.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| developer_id | uuid | NO | FK(developers.id) | Owning developer |
-| name | text | NO | | Project name |
-| description | text | YES | | Project description |
-| created_at | timestamptz | NO | DEFAULT now() | Record creation time |
+### 4. Repository
+*   **Purpose**: Represents a tracked codebase containing evidence of engineering work.
+*   **Ownership**: Owned by Project/Developer (for private repos) or tracked publicly.
+*   **Lifecycle**: Tracked when added to DevTwin.
+*   **Relationships**: Belongs to Project. Undergoes many Analysis Runs. Contains Commits, PRs.
+*   **Important Attributes**: GitHub Repo ID, full name, URL, visibility, default branch.
+*   **Source of Truth**: GitHub (mirrored/synced).
+*   **State**: Current metadata (analysis data separated).
 
-### 2. Repository Domain
+### 5. Repository Language
+*   **Purpose**: Statistics about languages used in a repository.
+*   **Ownership**: Owned by Repository.
+*   **Lifecycle**: Replaced/updated during Analysis Runs.
+*   **Relationships**: Belongs to Repository.
+*   **Important Attributes**: Language name, bytes.
+*   **Source of Truth**: Analysis Run (Linguist/Enry).
+*   **State**: Current state per repository.
 
-**`repositories`**
-Purpose: Represents a tracked codebase.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| project_id | uuid | YES | FK(projects.id) | Associated project |
-| github_repo_id | bigint | YES | UNIQUE | External GitHub repository ID |
-| name | text | NO | | Repository name |
-| full_name | text | NO | | Owner/Name format |
-| url | text | NO | | Clone or web URL |
-| visibility | text | NO | | 'public' or 'private' |
-| default_branch | text | NO | DEFAULT 'main' | Default branch name |
-| owner_login | text | NO | | GitHub owner name |
-| created_at | timestamptz | NO | DEFAULT now() | Record creation time |
+### 6. Repository Dependency
+*   **Purpose**: Tracked software dependencies (e.g., npm packages, pip packages).
+*   **Ownership**: Owned by Repository.
+*   **Lifecycle**: Updated during Analysis Runs.
+*   **Relationships**: Belongs to Repository. Maps to Technologies in SkillGraph.
+*   **Important Attributes**: Ecosystem, package name, version constraint.
+*   **Source of Truth**: Analysis Run (Dependency manifest parsing).
+*   **State**: Current state per repository.
 
-**`repository_languages`**
-Purpose: Extracted language usage statistics.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| repository_id | uuid | NO | FK(repositories.id) | Associated repo |
-| language | text | NO | | Language name (e.g., Python) |
-| bytes | bigint | NO | | Bytes of code |
-| UNIQUE(repository_id, language) | | | | Prevents duplicate language entries per repo |
+### 7. Commit
+*   **Purpose**: A unit of version-controlled work.
+*   **Ownership**: Owned by Repository. Attributed to Author (Developer).
+*   **Lifecycle**: Immutable once extracted from Git.
+*   **Relationships**: Belongs to Repository. May trigger Risk Findings or Evidence.
+*   **Important Attributes**: SHA, author email, timestamp, message.
+*   **Source of Truth**: Git History.
+*   **State**: Historical/Immutable.
 
-**`repository_dependencies`**
-Purpose: Tracked dependencies for CodeRisk and SkillGraph.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| repository_id | uuid | NO | FK(repositories.id) | Associated repo |
-| ecosystem | text | NO | | e.g., npm, pip |
-| package_name | text | NO | | Name of the package |
-| version_constraint| text | YES | | Version used |
-| UNIQUE(repository_id, ecosystem, package_name) | | | | Prevents duplicates |
+### 8. Pull Request
+*   **Purpose**: A unit of collaboration and peer review.
+*   **Ownership**: Owned by Repository.
+*   **Lifecycle**: Open -> Merged/Closed.
+*   **Relationships**: Belongs to Repository.
+*   **Important Attributes**: PR number, state, timestamps.
+*   **Source of Truth**: GitHub.
+*   **State**: Current state (syncs over time).
 
-**`commits`**
-Purpose: Stores relevant commit metadata for developer attribution.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| repository_id | uuid | NO | FK(repositories.id) | Associated repo |
-| sha | text | NO | | Git commit SHA |
-| author_email | text | YES | | Extracted author email |
-| author_name | text | YES | | Extracted author name |
-| message | text | YES | | Commit message |
-| committed_at | timestamptz | NO | | Git commit timestamp |
-| UNIQUE(repository_id, sha) | | | | Prevents duplicate commits |
+### 9. Analysis Job
+*   **Purpose**: Represents the queueing and scheduling request for an analysis.
+*   **Ownership**: System-owned.
+*   **Lifecycle**: QUEUED -> IN_PROGRESS -> COMPLETED/FAILED.
+*   **Relationships**: Triggers Analysis Run.
+*   **Important Attributes**: Priority, queued timestamp.
+*   **Source of Truth**: DevTwin Queue.
+*   **State**: Ephemeral/Current.
 
-**`pull_requests`**
-Purpose: Stores PR metadata for collaboration evidence.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| repository_id | uuid | NO | FK(repositories.id) | Associated repo |
-| pr_number | integer| NO | | GitHub PR number |
-| title | text | NO | | PR title |
-| state | text | NO | | 'open', 'closed', 'merged' |
-| created_at | timestamptz | NO | | PR creation time |
-| merged_at | timestamptz | YES | | PR merge time |
-| UNIQUE(repository_id, pr_number) | | | | Prevents duplicate PRs |
+### 10. Analysis Run
+*   **Purpose**: Represents a specific, bounded execution of the analysis pipeline on a repository.
+*   **Ownership**: System-owned (linked to Repository).
+*   **Lifecycle**: Created upon job execution. Finalizes upon completion/failure.
+*   **Relationships**: Belongs to Repository. Generates Observations, Risk Findings.
+*   **Important Attributes**: Status, analyzer version, schema version, error info, timestamps.
+*   **Source of Truth**: DevTwin Analysis Engine.
+*   **State**: Historical/Immutable once completed.
 
-### 3. Analysis & Observation Domain
+### 11. Observation
+*   **Purpose**: A directly detected, factual finding from an Analysis Run.
+*   **Ownership**: Owned by Analysis Run.
+*   **Lifecycle**: Created during an Analysis Run. Immutable.
+*   **Relationships**: Belongs to Analysis Run. Translates into Evidence or Risk Findings.
+*   **Important Attributes**: Source tool, source reference (file/line), raw data.
+*   **Source of Truth**: DevTwin Analysis Engine.
+*   **State**: Historical/Immutable.
 
-**`analysis_runs`**
-Purpose: Tracks a distinct execution of the DevTwin analysis pipeline.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| repository_id | uuid | NO | FK(repositories.id) | Analyzed repo |
-| status | analysis_status| NO | | ENUM: QUEUED, FETCHING, MINING, SKILL_GRAPH, CODE_RISK, CAPABILITY, COMPLETED, FAILED |
-| started_at | timestamptz | YES | | When processing began |
-| completed_at | timestamptz | YES | | When processing ended |
-| analyzer_version| text | NO | | Version of the extraction engine |
-| schema_version | text | NO | | Data schema version |
-| error_info | jsonb | YES | | Structured error log |
+### 12. Evidence
+*   **Purpose**: Contextualized support for a capability or technical inference, derived from Observations.
+*   **Ownership**: Developer-associated.
+*   **Lifecycle**: Created based on Observations.
+*   **Relationships**: Supported by Observations. Maps to Skills/Technologies/Concepts. Supports Capabilities.
+*   **Important Attributes**: Type (MENTION, USAGE, etc.), strength, directness, reliability, recency, polarity.
+*   **Source of Truth**: DevTwin Evidence Engine.
+*   **State**: Historical/Immutable.
 
-**`observations`**
-Purpose: Directly detected facts from an analysis run.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| analysis_run_id | uuid | NO | FK(analysis_runs.id) | Generating run |
-| type | text | NO | | What was observed |
-| source_tool | text | NO | | Tool used (e.g., 'AST_PARSER') |
-| source_reference| jsonb | YES | | Line number, commit, or file pointer |
-| confidence | numeric| YES | CHECK(confidence BETWEEN 0 AND 1) | Raw detection confidence |
-| observed_at | timestamptz | NO | DEFAULT now() | Time of observation |
+### 13. Skill
+*   **Purpose**: Broad competency area (e.g., "Backend Development").
+*   **Ownership**: System-owned (Taxonomy).
+*   **Lifecycle**: Managed globally by DevTwin.
+*   **Relationships**: Related to other Skills. Includes Technologies and Concepts.
+*   **Important Attributes**: Name, domain.
+*   **Source of Truth**: DevTwin Taxonomy.
+*   **State**: Current state.
 
-### 4. SkillGraph Domain
+### 14. Technology
+*   **Purpose**: Concrete implementation tool/framework (e.g., "FastAPI").
+*   **Ownership**: System-owned (Taxonomy).
+*   **Lifecycle**: Managed globally.
+*   **Relationships**: Part of Skills. Involves Concepts.
+*   **Important Attributes**: Name, type.
+*   **Source of Truth**: DevTwin Taxonomy.
+*   **State**: Current state.
 
-**`skills`** (Broad competencies)
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| name | text | NO | UNIQUE | e.g., 'Backend Development' |
-| domain | text | YES | | e.g., 'Software Engineering' |
+### 15. Concept
+*   **Purpose**: Underlying technical theory (e.g., "REST API").
+*   **Ownership**: System-owned (Taxonomy).
+*   **Lifecycle**: Managed globally.
+*   **Relationships**: Part of Skills. Involved in Technologies.
+*   **Important Attributes**: Name.
+*   **Source of Truth**: DevTwin Taxonomy.
+*   **State**: Current state.
 
-**`technologies`** (Concrete tools/languages)
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| name | text | NO | UNIQUE | e.g., 'FastAPI' |
-| type | text | NO | | e.g., 'FRAMEWORK', 'LANGUAGE' |
+### 16. Skill Relationship
+*   **Purpose**: Represents directed edges between nodes in the SkillGraph (e.g., React REQUIRES JavaScript).
+*   **Ownership**: System-owned (Taxonomy).
+*   **Lifecycle**: Managed globally.
+*   **Relationships**: Connects Taxonomy nodes.
+*   **Important Attributes**: Relation type (REQUIRES, RELATED_TO, PART_OF).
+*   **Source of Truth**: DevTwin Taxonomy.
+*   **State**: Current state.
 
-**`concepts`** (Theoretical knowledge)
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| name | text | NO | UNIQUE | e.g., 'REST API' |
+### 17. Developer Capability
+*   **Purpose**: The calculated, current inferred capability of a developer for a specific target.
+*   **Ownership**: Owned by Developer.
+*   **Lifecycle**: Continuously updated as new Evidence arrives.
+*   **Relationships**: Belongs to Developer. Targets exactly one Skill, Tech, or Concept. Supported by Evidence.
+*   **Important Attributes**: Score, confidence, model version.
+*   **Source of Truth**: DevTwin Capability Engine.
+*   **State**: Current state (Latest calculation).
 
-**SkillGraph Relationships (Junctions)**
-- `skill_technologies` (skill_id, technology_id) - PK(skill_id, technology_id)
-- `skill_concepts` (skill_id, concept_id) - PK(skill_id, concept_id)
-- `technology_concepts` (technology_id, concept_id) - PK(technology_id, concept_id)
-- `skill_relationships` (skill_id_1, skill_id_2, relation_type) - PK(skill_id_1, skill_id_2)
+### 18. Capability History
+*   **Purpose**: Temporal, immutable log of previous Capability states.
+*   **Ownership**: Owned by Developer Capability.
+*   **Lifecycle**: Appended whenever a Capability updates.
+*   **Relationships**: Belongs to Developer Capability. Linked to Analysis Run.
+*   **Important Attributes**: Historical score, historical confidence, timestamp, model version.
+*   **Source of Truth**: DevTwin Capability Engine.
+*   **State**: Historical/Immutable.
 
-### 5. Evidence Domain
+### 19. Skill Gap
+*   **Purpose**: The delta between a required capability target and the developer's current capability.
+*   **Ownership**: Owned by Developer.
+*   **Lifecycle**: Recalculated dynamically or periodically.
+*   **Relationships**: Belongs to Developer. Targets exactly one Skill, Tech, or Concept.
+*   **Important Attributes**: Target score, current score, gap value, confidence.
+*   **Source of Truth**: DevTwin Capability Engine.
+*   **State**: Current state.
 
-**`evidence`**
-Purpose: Contextualized support for capabilities derived from observations.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| observation_id | uuid | YES | FK(observations.id) | Source observation (nullable if manual) |
-| type | evidence_type | NO | | ENUM: MENTION, USAGE, APPLIED_ENGINEERING, DEMONSTRATED_OUTCOME |
-| strength | numeric| NO | CHECK(strength BETWEEN 0 AND 1) | Base hierarchy weight |
-| directness | numeric| NO | CHECK(directness BETWEEN 0 AND 1) | Relation to target |
-| reliability | numeric| NO | CHECK(reliability BETWEEN 0 AND 1) | Source trustworthiness |
-| recency | timestamptz | NO | | Time basis for decay |
-| polarity | numeric| NO | CHECK(polarity BETWEEN -1 AND 1) | Positive or negative evidence |
+### 20. Risk Finding
+*   **Purpose**: A CodeRisk signal detected in a repository.
+*   **Ownership**: Owned by Repository. (Optionally attributed to a commit/developer).
+*   **Lifecycle**: Generated during Analysis Runs.
+*   **Relationships**: Belongs to Repository, Analysis Run, Observation. Optionally linked to Commit.
+*   **Important Attributes**: Category (SECURITY, MAINTAINABILITY, etc.), severity, confidence, risk type.
+*   **Source of Truth**: CodeRisk Engine.
+*   **State**: Current and Historical (tied to runs).
 
-**Evidence Targets (Junctions)**
-- `evidence_skills` (evidence_id, skill_id) - PK(evidence_id, skill_id)
-- `evidence_technologies` (evidence_id, technology_id) - PK(evidence_id, technology_id)
-- `evidence_concepts` (evidence_id, concept_id) - PK(evidence_id, concept_id)
+## Crucial Conceptual Distinctions
 
-### 6. Capability & CodeRisk Domain
-
-**`developer_capabilities`**
-Purpose: Current state of a developer's capability.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| developer_id | uuid | NO | FK(developers.id) | Target developer |
-| skill_id | uuid | YES | FK(skills.id) | Target skill |
-| technology_id | uuid | YES | FK(technologies.id)| Target tech |
-| concept_id | uuid | YES | FK(concepts.id) | Target concept |
-| score | numeric| NO | CHECK(score BETWEEN 0 AND 1) | Capability score |
-| confidence | numeric| NO | CHECK(confidence BETWEEN 0 AND 1) | Estimate confidence |
-| scoring_version | text | NO | | Model version used |
-| updated_at | timestamptz | NO | DEFAULT now() | Last state update |
-| CHECK | | | | `num_nonnulls(skill_id, technology_id, concept_id) = 1` |
-| UNIQUE | | | | `(developer_id, skill_id, technology_id, concept_id)` |
-
-**`capability_history`**
-Purpose: Immutable temporal log of capability changes.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| capability_id | uuid | NO | FK(developer_capabilities.id) | The capability being tracked |
-| score | numeric| NO | | Historical score |
-| confidence | numeric| NO | | Historical confidence |
-| model_version | text | NO | | Scoring model version |
-| analysis_run_id | uuid | YES | FK(analysis_runs.id) | Run that caused the update |
-| recorded_at | timestamptz | NO | DEFAULT now() | Timestamp of change |
-
-**`skill_gaps`**
-Purpose: Tracks calculated deltas between required and actual capability.
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| developer_id | uuid | NO | FK(developers.id) | The developer |
-| target_skill_id | uuid | YES | FK(skills.id) | |
-| target_technology_id | uuid | YES | FK(technologies.id)| |
-| target_concept_id | uuid | YES | FK(concepts.id) | |
-| target_score | numeric| NO | | Required capability level |
-| current_score | numeric| NO | | Developer's current capability |
-| confidence | numeric| NO | | Confidence in the current score |
-| gap_value | numeric| NO | | Calculated gap |
-| model_version | text | NO | | Calculation version |
-| calculated_at | timestamptz | NO | DEFAULT now() | Calculation timestamp |
-| CHECK | | | | `num_nonnulls(target_skill_id, target_technology_id, target_concept_id) = 1` |
-
-**`risk_findings`**
-Purpose: Repository and commit-level risk signals (CodeRisk).
-| Column | Type | Nullable | Constraint | Description |
-|---|---|---|---|---|
-| id | uuid | NO | PK | Internal identifier |
-| repository_id | uuid | NO | FK(repositories.id) | Affected repo |
-| analysis_run_id | uuid | NO | FK(analysis_runs.id) | Run that found the risk |
-| observation_id | uuid | NO | FK(observations.id)| Underlying observation |
-| commit_id | uuid | YES | FK(commits.id) | Attributed commit (if applicable) |
-| file_path | text | YES | | Location in repo |
-| line_start | integer| YES | | Code block start |
-| line_end | integer| YES | | Code block end |
-| category | risk_category | NO | | ENUM: SECURITY, RELIABILITY, TESTING, MAINTAINABILITY, DEPENDENCY, ARCHITECTURE |
-| risk_type | text | NO | | Specific rule (e.g., 'HARDCODED_SECRET') |
-| severity | risk_severity | NO | | ENUM: LOW, MEDIUM, HIGH, CRITICAL |
-| confidence | numeric| NO | CHECK(confidence BETWEEN 0 AND 1) | Heuristic certainty |
-| source_tool | text | NO | | e.g., 'CodeQL', 'CustomAST' |
-| detected_at | timestamptz | NO | DEFAULT now() | Timestamp |
-
-## Indexes
-- `developer_capabilities (developer_id)` - Fast lookups for dashboard.
-- `capability_history (capability_id, recorded_at DESC)` - Time-series retrieval.
-- `evidence_skills/techs/concepts (*_id)` - Reverse lookups to find what evidence supports a skill.
-- `risk_findings (repository_id, severity)` - Dashboard filtering.
-- `analysis_runs (repository_id, started_at DESC)` - Finding the latest analysis state.
-- `observations (analysis_run_id)` - Retrieving raw data for a run.
-
-## Row Level Security (RLS) Strategy
-- **Developers**: Can read their own `developers`, `github_accounts`, and `projects` records.
-- **Capabilities & Evidence**: A developer can only query `developer_capabilities`, `capability_history`, `skill_gaps`, and `evidence` where the record traces back to their `developer_id`.
-- **Repositories & Risks**: A developer can read `repositories`, `analysis_runs`, and `risk_findings` if the repository belongs to a project they own.
-- **SkillGraph Taxonomy**: `skills`, `technologies`, `concepts`, and their relationships are universally readable by authenticated users as they form a public, shared taxonomy.
-
-## Migration Strategy
-- **Migration 001**: Core identities (`developers`, `github_accounts`, `projects`).
-- **Migration 002**: GitHub/repository domain (`repositories`, dependencies, commits, PRs).
-- **Migration 003**: Analysis/observation domain (ENUMs, `analysis_runs`, `observations`).
-- **Migration 004**: SkillGraph domain (Taxonomy tables and junction relationships).
-- **Migration 005**: Evidence/capability domain (Evidence tables, exclusive arc `developer_capabilities`, `capability_history`, `skill_gaps`).
-- **Migration 006**: CodeRisk domain (`risk_findings`).
-- **Migration 007**: RLS policies, indexing, and final constraints.
+**OBSERVATION vs. EVIDENCE vs. INFERENCE vs. CAPABILITY**
+1. **Observation**: "File `server.py` contains `from fastapi import FastAPI`." (A raw, undeniable fact).
+2. **Evidence**: "Developer used FastAPI in a backend context." (Observation contextualized with type `USAGE`, strength `0.6`).
+3. **Inference**: "Because Developer used FastAPI, they likely understand REST API concepts." (SkillGraph traversal).
+4. **Capability**: "Developer's overall ability in Backend Development is 0.72 with 0.8 confidence." (The aggregated mathematical result).

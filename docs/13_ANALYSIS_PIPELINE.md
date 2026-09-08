@@ -1,21 +1,49 @@
-# 13. Analysis Pipeline
+# 13. Analysis Pipeline Contract
 
 ## Overview
-Repository analysis in DevTwin MUST NOT happen inside a synchronous HTTP request. The process is resource-intensive and requires a job-based architecture.
+Repository analysis in DevTwin MUST NOT happen inside a synchronous HTTP request. The process is resource-intensive and requires an asynchronous, reproducible job-based architecture.
 
-## Pipeline Architecture
-`POST /analysis -> Create Analysis Job -> Queue -> Worker -> Process -> Database -> Frontend`
+## Pipeline Flow Contract
 
-## Analysis States
-An `analysis_runs` record progresses through the following strict states (mapped as a PostgreSQL ENUM):
-1.  **QUEUED**: Job is in Redis waiting for a worker.
-2.  **FETCHING**: Worker is downloading repository metadata and cloning code.
-3.  **MINING**: Extracting raw `observations` (AST parsing, dependencies).
-4.  **SKILL_GRAPH**: Mapping observations to the SkillGraph taxonomy.
-5.  **CODE_RISK**: Running static analysis to generate `risk_findings`.
-6.  **CAPABILITY**: Aggregating `evidence` and updating `developer_capabilities` and `capability_history`.
-7.  **COMPLETED**: Analysis finished successfully.
-8.  **FAILED**: Analysis encountered an error, captured in `error_info`.
+The pipeline executes sequentially. Each stage consumes data from the previous stage and produces specific database entities.
 
-## Worker Processing
-Workers (e.g., Python processes using Celery or RQ) pull jobs from a Redis queue. They execute the discrete intelligence layers (Miner, CodeRisk Engine, SkillGraph Builder, Capability Scorer) sequentially, persisting the generated `Observation`, `RiskSignal`, and `EvidenceItem` objects to the PostgreSQL database.
+### Stage 1: Input -> Queue
+-   **Consumes**: API Request (`POST /analysis`).
+-   **Produces**: `analysis_jobs` record (Status: QUEUED).
+
+### Stage 2: Fetching
+-   **Consumes**: `analysis_jobs` queue item.
+-   **Action**: Worker picks up job, creates `analysis_runs` record (Status: FETCHING). Clones Git repo, fetches GitHub metadata.
+-   **Produces**: Local temporary file tree.
+
+### Stage 3: Repository Mining
+-   **Consumes**: File tree.
+-   **Action**: Runs Linguist, parses `package.json`/`requirements.txt`, runs AST parsers. Updates `analysis_runs` to MINING.
+-   **Produces**: Raw `observations` (e.g., "Dependency React found"), `repository_languages`, `repository_dependencies`.
+
+### Stage 4: SkillGraph Mapping
+-   **Consumes**: `observations`, `repository_dependencies`.
+-   **Action**: Updates run to SKILL_GRAPH. Maps raw dependencies/languages to global `technologies` and `concepts` in the database.
+-   **Produces**: Mapped `observations` linked to taxonomy.
+
+### Stage 5: CodeRisk
+-   **Consumes**: File tree, AST, Git history (Commits).
+-   **Action**: Updates run to CODE_RISK. Executes static analysis rules (e.g., security heuristics, complexity metrics).
+-   **Produces**: `risk_findings` (categorized, severity-rated, optionally attributed to `commits`).
+
+### Stage 6: Evidence Generation
+-   **Consumes**: `observations`, `risk_findings`.
+-   **Action**: Contextualizes observations. Assigns strength, directness, reliability.
+-   **Produces**: `evidence` records and junction records (`evidence_skills`, etc.).
+
+### Stage 7: Capability & Skill Gap Calculation
+-   **Consumes**: `evidence` for the developer.
+-   **Action**: Updates run to CAPABILITY. Executes mathematical scoring model to calculate new capability score and confidence.
+-   **Produces**: Updates to `developer_capabilities`, appends to `capability_history`, recalculates `skill_gaps`.
+
+### Stage 8: Completion
+-   **Consumes**: Run state.
+-   **Produces**: Updates `analysis_runs` to COMPLETED (or FAILED with `error_info`). Frontend polling displays results.
+
+## Error Handling
+If any stage fails critically (e.g., repo not found, out of memory), the pipeline halts, logs the exception trace to `analysis_runs.error_info`, and sets status to FAILED. Partial states (e.g., observations recorded before failure) remain for debugging.
