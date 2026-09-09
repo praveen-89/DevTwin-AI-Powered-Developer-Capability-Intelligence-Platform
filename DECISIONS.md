@@ -72,7 +72,40 @@ Source of Truth: DECISIONS.md
 
 ## ADR-009: Delaying Migration Generation
 *   **Date**: 2026-09-08
-*   **Status**: ACTIVE
+*   **Status**: SUPERSEDED
 *   **Title**: Delay physical SQL migration files until specification approval
 *   **Decision**: Halt before writing code/migrations.
-*   **Why This Decision**: Specifications must be verified and consistent. ORM choice will dictate the physical generation.
+*   **Why This Decision**: Specifications must be verified and consistent.
+*   **Superseded By**: Implementation milestone v0.1 where migrations were physically generated.
+
+## ADR-010: Risk Does Not Equal Incompetence
+*   **Date**: 2026-09-09
+*   **Status**: ACTIVE
+*   **Title**: CodeRisk acts as an evidence generator, not a direct competence scorer
+*   **Context**: How to penalize capability based on bad code.
+*   **Decision**: A risk finding generates negative evidence but does not directly overwrite or reset a capability score to zero.
+*   **Why This Decision**: Developers make mistakes or work under constraints. Risk is a behavioral signal to be weighed, not definitive proof of complete incompetence.
+
+## ADR-011: Evidence-Backed Capabilities
+*   **Date**: 2026-09-09
+*   **Status**: ACTIVE
+*   **Title**: No capability score without evidence
+*   **Context**: Ensuring the validity of capability metrics.
+*   **Decision**: Capability scores must be entirely derived from verifiable evidence (observations).
+*   **Why This Decision**: Prevents the platform from guessing or assigning arbitrary scores.
+
+## ADR-012: v0.1 Foundation & StudyTwin Deferral
+*   **Date**: 2026-09-09
+*   **Status**: ACTIVE
+*   **Title**: Focus on Capability Intelligence Foundation (v0.1); Defer StudyTwin (Major)
+*   **Context**: Scoping the initial implementation.
+*   **Decision**: v0.1 establishes the foundational assessment engine (SkillGraph, CodeRisk, Evidence, Capability). StudyTwin (personalized learning, outcome measurement) is deferred to a future Major phase.
+*   **Why This Decision**: Essential to prove the analytical extraction works before building a learning layer on top of it.
+
+## ADR-013: RLS as Defense-in-Depth
+*   **Date**: 2026-09-09
+*   **Status**: ACTIVE
+*   **Title**: Database-level Row Level Security (RLS) for data isolation
+*   **Context**: Preventing cross-developer data leakage.
+*   **Decision**: Implement strict RLS policies on all developer-owned tables, tracking ownership up to `developers.auth_user_id`.
+*   **Why This Decision**: Ensures that even if the API layer has an authorization flaw, the database engine enforces the "Developer A cannot access Developer B's private data" rule.

@@ -86,7 +86,7 @@ Future functionality includes **StudyTwin**, which closes the loop:
 ## Acceptance Criteria
 1.  A developer can connect a repository via OAuth, and within 5 minutes, see an updated SkillGraph.
 2.  The UI explicitly distinguishes between a "Low Capability Score" and "Low Confidence."
-3.  A risk finding (e.g., hardcoded secret) reduces the relevant capability score (e.g., Security) and is logged as negative evidence, but does not wipe out competence.
+3.  A risk finding (e.g., hardcoded secret) is logged as negative engineering evidence, which influences the relevant capability estimate (e.g., Security) without directly wiping out competence.
 
 ## Future Scope
 *   GitLab/Bitbucket integrations.

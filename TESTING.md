@@ -16,6 +16,8 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 `Unit -> Integration -> System -> End-to-End`
 
 ## Backend Testing
+*   **Current Status**: `pytest -v` -> 10 passed, 0 warnings.
+*   **Scope**: Covers the v0.1 foundation, health checks, configuration, and includes a static security regression test for RLS NULL ownership bypasses.
 *   **API Tests**: Validate REST endpoints, payload shapes, and HTTP status codes using FastAPI test clients.
 *   **Service Tests**: Isolate business logic from database boundaries.
 *   **Repository Mining Tests**: Run extractors against known mock repositories with predefined Git histories and file trees to ensure deterministic extraction.
@@ -44,7 +46,8 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 
 ## Database Testing
 *   **Constraints**: Attempt to insert invalid data (e.g., polymorphic violation in Exclusive Arcs) to ensure `CHECK` constraints trigger.
-*   **RLS**: Authenticate as Developer A and attempt to query Developer B's data; assert access is denied.
+*   **RLS Security Regression**: Static security regression test to prevent RLS ownership bypasses (e.g., missing project_id).
+*   **RLS Integration**: (Future hardening) Runtime database-level RLS integration test to authenticate as Developer A and attempt to query Developer B's data.
 
 ## Frontend Testing
 *   **Components**: Unit test UI components (e.g., the Capability Radar chart) with mock JSON props.

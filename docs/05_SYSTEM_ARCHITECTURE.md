@@ -3,6 +3,29 @@
 ## Overview
 DevTwin utilizes a modular, job-based architecture designed to decouple heavy repository analysis from responsive user interactions. The architecture is explicitly designed to support the evidence-backed capability model.
 
+## Implementation Status (v0.1)
+
+**CURRENTLY IMPLEMENTED:**
+* FastAPI foundation
+* configuration
+* health endpoints
+* database connectivity
+* migrations
+* RLS
+* security hardening
+* backend tests
+
+**PLANNED:**
+* authentication
+* GitHub integration
+* repository ingestion
+* mining
+* SkillGraph runtime
+* CodeRisk runtime
+* evidence pipeline
+* capability engine
+* dashboard
+
 ## Core Architectural Components
 
 ### 1. Frontend (Next.js)

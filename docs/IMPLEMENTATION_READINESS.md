@@ -42,7 +42,8 @@ Last Updated: 2026-09-09
 | DB readiness endpoint (`GET /health/database`) | IMPLEMENTED | `backend/app/api/routes/health.py` |
 | Initial schema migration (all domain tables) | IMPLEMENTED | `database/migrations/001_initial_schema.sql` |
 | RLS policies migration | IMPLEMENTED | `database/migrations/002_rls_policies.sql` |
-| Backend unit tests (health + config) | IMPLEMENTED | `backend/tests/` |
+| RLS security hardening migration | IMPLEMENTED | `database/migrations/003_rls_hardening.sql` |
+| Backend unit tests (health, config, RLS security) | IMPLEMENTED | `backend/tests/` |
 | `.env.example` with actual required vars | IMPLEMENTED | `.env.example` |
 
 ---

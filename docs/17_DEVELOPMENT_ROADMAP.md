@@ -1,29 +1,43 @@
 # 17. Development Roadmap
 
-## Phase 1: Foundation & Specification (Current)
-- Define system architecture, data models, and intelligence layers.
-- Initialize repository structure and documentation.
+## PHASE 1 — Backend Foundation
+COMPLETED
 
-## Phase 2: Data Ingestion & Mining
-- Implement GitHub API integration for fetching repositories.
-- Build the Repository Miner (AST parsing, dependency extraction).
-- Implement background worker queue architecture.
+## PHASE 2 — Database / Supabase
+COMPLETED
 
-## Phase 3: Intelligence Layers
-- Implement the basic CodeRisk engine (heuristics for security, testing, maintainability).
-- Implement the SkillGraph builder (mapping mined data to technologies/concepts).
-- Implement the Evidence Engine (translating observations to weighted evidence).
+## PHASE 3 — Authentication
+NEXT
 
-## Phase 4: Capability Modeling
-- Implement the Capability Scorer (aggregating evidence into scores and confidence).
-- Implement historical state tracking.
+## PHASE 4 — GitHub Integration
+NEXT / v0.2
 
-## Phase 5: API & Frontend Integration
-- Develop the FastAPI endpoints for querying the intelligence layers.
-- Build the Next.js Developer Dashboard.
-- Build the Evidence Explorer UI for explainability.
+## PHASE 5 — Repository Ingestion
+PLANNED
 
-## Phase 6: Testing & Evaluation
-- Run evaluation plan against sample repositories.
-- Refine evidence weighting and CodeRisk heuristics.
-- Finalize Minor MVP documentation.
+## PHASE 6 — Repository Mining
+PLANNED
+
+## PHASE 7 — SkillGraph
+PLANNED
+
+## PHASE 8 — CodeRisk
+PLANNED
+
+## PHASE 9 — Evidence Engine
+PLANNED
+
+## PHASE 10 — Capability Engine
+PLANNED
+
+## PHASE 11 — API Integration
+PLANNED
+
+## PHASE 12 — Frontend Dashboard
+PLANNED
+
+## PHASE 13 — Testing
+PLANNED / ongoing
+
+## PHASE 14 — Research Evaluation
+FUTURE

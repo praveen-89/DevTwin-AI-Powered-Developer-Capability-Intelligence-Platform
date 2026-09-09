@@ -71,8 +71,14 @@ The Major roadmap will extend the platform to include the StudyTwin layer, featu
 - **Risk ≠ Competence**: CodeRisk findings are evidence signals, not blame verdicts.
 
 ## Current Project Status
-**Stage**: Architecture & Specification Freeze
-**Implementation**: Not Started
-**Status**: Research + System Design + Implementation Preparation
+**Current Stage:** v0.1 — Developer Capability Intelligence Foundation
+
+**Status:** Backend foundation implemented and security hardened.
+**Database:** Supabase PostgreSQL connected.
+**RLS:** Security hardening completed for identified NULL ownership bypasses.
+**Tests:** 10/10 passing.
+
+**Current milestone:** v0.1 completed.
+**Next milestone:** v0.2 — GitHub Authentication & Repository Registration.
 
 The full architectural specification is frozen. See `docs/IMPLEMENTATION_READINESS.md` for the complete status of each component.
