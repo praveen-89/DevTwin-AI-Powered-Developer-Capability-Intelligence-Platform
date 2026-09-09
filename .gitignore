@@ -37,15 +37,22 @@ build/
 
 # Environment
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 .venv
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Secrets & Credentials
+*.pem
+*.key
+*.cert
+*.crt
+secrets/
+secrets.json
+*secret*
 
 # IDE
 .idea/

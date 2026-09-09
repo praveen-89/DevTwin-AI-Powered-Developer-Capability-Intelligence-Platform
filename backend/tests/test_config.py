@@ -19,7 +19,12 @@ def clear_settings_cache():
 
 
 def test_settings_fails_without_database_url(monkeypatch):
-    """Settings must raise ValidationError if DATABASE_URL is missing."""
+    """Settings must raise ValidationError if DATABASE_URL is missing.
+
+    _env_file=None is passed explicitly so that pydantic-settings does NOT
+    fall back to loading backend/.env — the test must be hermetic and must
+    not depend on the presence or contents of any .env file on disk.
+    """
     monkeypatch.setenv("SUPABASE_URL", "https://placeholder.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service")
@@ -28,7 +33,7 @@ def test_settings_fails_without_database_url(monkeypatch):
 
     from app.core.config import Settings
     with pytest.raises(ValidationError) as exc_info:
-        Settings()  # type: ignore[call-arg]
+        Settings(_env_file=None)  # type: ignore[call-arg]  # disable .env loading
 
     errors = exc_info.value.errors()
     field_names = [e["loc"][0] for e in errors]
