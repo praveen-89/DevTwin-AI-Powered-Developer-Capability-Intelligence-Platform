@@ -28,7 +28,17 @@ By using three nullable foreign keys (`skill_id`, `technology_id`, `concept_id`)
 | developer_id | uuid | NO | | FK(developers.id) ON DELETE CASCADE | |
 | github_id | bigint | NO | | UNIQUE | GitHub's immutable User ID |
 | username | text | NO | | | |
-| access_token_enc| text | YES | | | External Vault ref or encrypted material. NEVER plaintext. |
+| installation_id | bigint | YES | | | GitHub App Installation ID |
+
+**`github_connection_states`**
+| Column | Type | Nullable | Default | Constraints | Description |
+|---|---|---|---|---|---|
+| id | uuid | NO | uuid_generate_v4() | PK | Internal ID |
+| developer_id | uuid | NO | | FK(developers.id) ON DELETE CASCADE | |
+| state_hash | text | NO | | UNIQUE | Cryptographically random single-use state |
+| created_at | timestamptz | NO | now() | | |
+| expires_at | timestamptz | NO | | | |
+| used_at | timestamptz | YES | | | |
 
 **`projects`**
 | Column | Type | Nullable | Default | Constraints | Description |

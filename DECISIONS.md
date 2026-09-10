@@ -109,3 +109,16 @@ Source of Truth: DECISIONS.md
 *   **Context**: Preventing cross-developer data leakage.
 *   **Decision**: Implement strict RLS policies on all developer-owned tables, tracking ownership up to `developers.auth_user_id`.
 *   **Why This Decision**: Ensures that even if the API layer has an authorization flaw, the database engine enforces the "Developer A cannot access Developer B's private data" rule.
+
+## ADR-014: Authentication & Identity Architecture
+*   **Date**: 2026-09-10
+*   **Status**: ACTIVE
+*   **Title**: Supabase Auth with JWKS and Hybrid GitHub App Flow
+*   **Context**: Securing DevTwin access and safely connecting GitHub repositories without exposing sensitive tokens.
+*   **Decision**: 
+    1. Verify Supabase JWTs via JWKS instead of the legacy secret.
+    2. Explicitly map developers via `POST /developers/me`.
+    3. Use a hybrid GitHub App flow: require user authorization during App installation. The authenticated GitHub user access token is used to verify that the user has access to the specified GitHub App installation (`GET /user/installations`). (Note: `GET /user/installations/{installation_id}/repositories` can be used later to determine repository-level access).
+    4. Store only the `installation_id` in `github_accounts`. Do not persist user or installation access tokens.
+    5. Maintain short-lived OAuth state in PostgreSQL (`github_connection_states`) instead of Redis.
+*   **Why This Decision**: It ensures cryptographically proven identity boundaries, eliminates persistent GitHub credentials, prevents installation ID spoofing, and keeps the Minor MVP stack simple (no Redis).

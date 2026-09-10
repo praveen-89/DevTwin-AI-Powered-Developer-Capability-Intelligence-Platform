@@ -30,4 +30,4 @@ SkillGraph is the relational intelligence layer that maps the connections betwee
 If evidence points to a concrete Docker implementation in a repository, the graph infers support for the broader Containerization concept and DevOps skill.
 
 ## Database Implementation (Minor Project)
-For the Minor MVP, the SkillGraph is implemented using a relational database (PostgreSQL/Supabase) designed to support graph-like queries via junction tables. A dedicated graph database (like Neo4j) is deferred unless performance or complex traversal requirements justify its inclusion in the Major roadmap.
+For the Minor MVP, the SkillGraph is designed to be implemented using a relational database (PostgreSQL/Supabase) designed to support graph-like queries via junction tables. A dedicated graph database (like Neo4j) is deferred unless performance or complex traversal requirements justify its inclusion in the Major roadmap.

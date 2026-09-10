@@ -52,6 +52,13 @@ These are logical modules executed primarily by the workers:
 ### 5. Database (PostgreSQL)
 A relational schema designed to support graph-like queries without the initial overhead of a dedicated graph database (like Neo4j) for the Minor MVP. It stores users, repositories, evidence, risk signals, and capability states.
 
+### 6. Authentication & Identity
+DevTwin uses Supabase Auth for primary user authentication and a hybrid GitHub App flow for secure repository integration.
+- **Supabase Auth**: The frontend obtains a JWT which the backend cryptographically verifies using Supabase JWKS.
+- **Identity Mapping**: `auth.uid()` maps 1:1 to an internal `developers.auth_user_id`. Developer records are created explicitly via `POST /developers/me`.
+- **GitHub Integration**: Uses a GitHub App installation flow with user authorization. The authenticated GitHub user access token is used to verify that the user has access to the specified GitHub App installation (`GET /user/installations`). The temporary user token is never persisted.
+- **GitHub Data Access**: Uses on-demand, short-lived installation access tokens. Persistent GitHub credentials are not stored in the database.
+
 ## Data Flow Pipeline
 
 ```text

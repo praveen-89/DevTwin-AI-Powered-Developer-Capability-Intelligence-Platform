@@ -15,6 +15,10 @@
 *   **Purpose**: Retrieve developer identity for the authenticated user.
 *   **Response**: `{ "id": "uuid", "github_username": "string" }`
 
+**`POST /developers/me`**
+*   **Purpose**: Create a developer identity for the newly authenticated user.
+*   **Response**: `{ "id": "uuid", "auth_user_id": "uuid" }`
+
 **`GET /developers/{id}/capabilities`**
 *   **Purpose**: Get the current capability state for the developer.
 *   **Response**: Array of `developer_capabilities` objects including target metadata (resolved Skill/Tech/Concept name), `score`, and `confidence`.
@@ -23,7 +27,26 @@
 *   **Purpose**: Retrieve the contextualized evidence supporting a developer's capabilities.
 *   **Response**: Array of `evidence` objects including `type`, `strength`, and `polarity`.
 
-### 2. Repositories
+### 2. GitHub Integration
+
+**`GET /github/install`**
+*   **Purpose**: Start the GitHub App connection flow.
+*   **Response**: `{ "install_url": "string" }`
+
+**`GET /github/callback`**
+*   **Purpose**: Handle GitHub App installation redirect with user authorization.
+*   **Request**: `?code=&installation_id=&setup_action=install&state=`
+*   **Response**: 302 Redirect
+
+**`GET /github/status`**
+*   **Purpose**: Check GitHub connection status.
+*   **Response**: `{ "connected": boolean, "username": "string", "installation_id": 123 }`
+
+**`DELETE /github/disconnect`**
+*   **Purpose**: Remove GitHub connection.
+*   **Response**: 204 No Content
+
+### 3. Repositories
 
 **`GET /repositories`**
 *   **Purpose**: List repositories tracked by the developer.

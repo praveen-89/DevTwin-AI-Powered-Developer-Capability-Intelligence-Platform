@@ -52,7 +52,8 @@ Last Updated: 2026-09-09
 
 | Area | Status |
 |---|---|
-| GitHub OAuth implementation | NOT STARTED |
+| GitHub App Hybrid integration | DESIGNED / READY |
+| Supabase Auth JWKS integration | DESIGNED / READY |
 | Repository ingestion | NOT STARTED |
 | Repository mining workers | NOT STARTED |
 | SkillGraph engine | NOT STARTED |
@@ -66,8 +67,9 @@ Last Updated: 2026-09-09
 
 ## Next Milestone
 **v0.2 — GitHub Auth & Repository Registration**
-1. Implement Supabase Auth flow (JWT verification in FastAPI).
+1. Implement Supabase Auth JWKS verification in FastAPI.
 2. Implement `POST /developers/me` (create developer record from auth token).
-3. Implement GitHub OAuth integration (link GitHub account).
-4. Implement `POST /repositories` and `GET /repositories` endpoints.
-5. Write integration tests against a local Supabase instance.
+3. Implement `github_connection_states` migration and drop `access_token_enc`.
+4. Implement GitHub App Hybrid flow (installation + user authorization).
+5. Implement `POST /repositories` and `GET /github/repositories` endpoints.
+6. Write integration tests against a local Supabase instance.
