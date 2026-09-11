@@ -29,7 +29,8 @@ def test_settings_fails_without_database_url(monkeypatch):
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service")
     monkeypatch.setenv("SECRET_KEY", "secret")
-    # Deliberately omit DATABASE_URL
+    # Deliberately omit DATABASE_URL — also remove it if it leaked from another test
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     from app.core.config import Settings
     with pytest.raises(ValidationError) as exc_info:
