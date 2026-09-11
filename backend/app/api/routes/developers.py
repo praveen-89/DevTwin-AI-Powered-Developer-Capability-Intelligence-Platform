@@ -38,7 +38,7 @@ async def create_developer_me(
         auth_user_uuid = uuid.UUID(current_user.sub)
     except ValueError:
         # Invalid sub in the JWT. This shouldn't happen with valid Supabase tokens.
-        logger.warning("Verified JWT sub is not a valid UUID: %s", current_user.sub)
+        logger.warning("Verified JWT sub is not a valid UUID")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed.",
