@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.api.routes import health as health_router
+from app.api.routes import developers as developers_router
 
 
 def create_app() -> FastAPI:
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
 
     # ── Routes ─────────────────────────────────────────────────────
     app.include_router(health_router.router)
+    app.include_router(developers_router.router)
 
     logger.info("Application startup complete.")
     return app

@@ -79,9 +79,9 @@ supabase db push
 * Supabase JWT/JWKS authentication foundation
 * authenticated-user dependency
 * authenticated-developer lookup dependency
+* `POST /developers/me` — Authenticated developer identity provisioning
 
 **Planned / Not Yet Implemented:**
-* `POST /developers/me` is planned/next and is NOT implemented yet.
 * GitHub integration is planned and is NOT implemented yet.
 
 ## Testing

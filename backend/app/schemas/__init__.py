@@ -1,1 +1,3 @@
-# Pydantic request/response schemas — to be populated in later milestones.
+from app.schemas.developer import DeveloperResponse
+
+__all__ = ["DeveloperResponse"]
