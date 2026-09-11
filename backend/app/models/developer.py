@@ -13,11 +13,10 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import UUID, DateTime, String, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
 
-class Base(DeclarativeBase):
-    pass
+from app.db.base import Base
 
 
 class Developer(Base):

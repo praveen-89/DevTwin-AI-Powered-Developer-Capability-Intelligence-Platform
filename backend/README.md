@@ -66,14 +66,23 @@ supabase db push
 # Or manually via the Supabase Dashboard SQL Editor:
 # 1. Open: database/migrations/001_initial_schema.sql — run it
 # 2. Open: database/migrations/002_rls_policies.sql — run it
+# 3. Open: database/migrations/003_v01_foundation.sql — run it
+# 4. Open: database/migrations/004_v02_auth_github.sql — run it
 ```
 
-## API Endpoints (v0.1)
+## API Endpoints (v0.2 Foundation)
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | API liveness check (no DB required) |
-| GET | `/health/database` | DB readiness check (returns 503 if DB unreachable) |
+### Implemented foundation
+
+* `GET /health` — API liveness check (no DB required)
+* `GET /health/database` — DB readiness check
+* Supabase JWT/JWKS authentication foundation
+* authenticated-user dependency
+* authenticated-developer lookup dependency
+
+**Planned / Not Yet Implemented:**
+* `POST /developers/me` is planned/next and is NOT implemented yet.
+* GitHub integration is planned and is NOT implemented yet.
 
 ## Testing
 
