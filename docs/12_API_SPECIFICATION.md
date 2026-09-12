@@ -30,11 +30,11 @@
 ### 2. GitHub Integration
 
 **`GET /github/install`**
-*   **Purpose**: Start the GitHub App connection flow.
+*   **Purpose**: Start the GitHub App connection flow with PKCE.
 *   **Response**: `{ "install_url": "string" }`
 
 **`GET /github/callback`**
-*   **Purpose**: Handle GitHub App installation redirect with user authorization.
+*   **Purpose**: Handle GitHub App installation redirect with user authorization. Implements atomic state claim and PKCE code exchange.
 *   **Request**: `?code=&installation_id=&setup_action=install&state=`
 *   **Response**: 302 Redirect
 
@@ -43,8 +43,12 @@
 *   **Response**: `{ "connected": boolean, "username": "string", "installation_id": 123 }`
 
 **`DELETE /github/disconnect`**
-*   **Purpose**: Remove GitHub connection.
+*   **Purpose**: Remove/inactivate the active GitHub connection (does NOT delete historical DevTwin analysis data).
 *   **Response**: 204 No Content
+
+**`GET /github/repositories`** *(NOT IMPLEMENTED — Future Phase)*
+*   **Purpose**: List repositories accessible via the GitHub App installation using an on-demand Installation Access Token.
+*   **Response**: 200 OK, array of repository objects
 
 ### 3. Repositories
 

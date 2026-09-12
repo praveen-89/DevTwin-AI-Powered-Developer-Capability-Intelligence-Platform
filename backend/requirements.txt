@@ -13,6 +13,7 @@ python-dotenv==1.0.1
 
 # JWT / Auth
 PyJWT[crypto]==2.13.0   # Supabase JWKS asymmetric JWT verification (ADR-014)
+cryptography==50.0.1    # Authenticated encryption for PKCE verifiers (ADR-014)
 
 # Testing
 pytest==8.3.3

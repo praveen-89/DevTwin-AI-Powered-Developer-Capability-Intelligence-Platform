@@ -67,9 +67,13 @@ Last Updated: 2026-09-09
 
 ## Next Milestone
 **v0.2 — GitHub Auth & Repository Registration**
-1. Implement Supabase Auth JWKS verification in FastAPI.
-2. Implement `POST /developers/me` (create developer record from auth token).
-3. Implement `github_connection_states` migration and drop `access_token_enc`.
-4. Implement GitHub App Hybrid flow (installation + user authorization).
-5. Implement `POST /repositories` and `GET /github/repositories` endpoints.
-6. Write integration tests against a local Supabase instance.
+1. Supabase Auth JWKS verification in FastAPI (IMPLEMENTED).
+2. `POST /developers/me` provisioning (IMPLEMENTED).
+3. Follow-up Migration (code_verifier_enc, UNIQUE(developer_id), disconnected_at).
+4. GitHub App config + PKCE encryption utility.
+5. GitHub OAuth/App backend service.
+6. GitHub install & callback routes.
+7. Account-linking transaction policy.
+8. Status & disconnect endpoints.
+9. Security/regression tests for GitHub integration.
+10. Repository listing / installation access token service.

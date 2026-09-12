@@ -25,10 +25,11 @@ By using three nullable foreign keys (`skill_id`, `technology_id`, `concept_id`)
 | Column | Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
 | id | uuid | NO | uuid_generate_v4() | PK | Internal ID |
-| developer_id | uuid | NO | | FK(developers.id) ON DELETE CASCADE | |
+| developer_id | uuid | NO | | FK(developers.id) ON DELETE CASCADE | [FUTURE MIGRATION REQUIRED: ADD UNIQUE] |
 | github_id | bigint | NO | | UNIQUE | GitHub's immutable User ID |
 | username | text | NO | | | |
 | installation_id | bigint | YES | | | GitHub App Installation ID |
+| disconnected_at | timestamptz | YES | | | [FUTURE MIGRATION REQUIRED: Disconnect status] |
 
 **`github_connection_states`**
 | Column | Type | Nullable | Default | Constraints | Description |
@@ -39,6 +40,7 @@ By using three nullable foreign keys (`skill_id`, `technology_id`, `concept_id`)
 | created_at | timestamptz | NO | now() | | |
 | expires_at | timestamptz | NO | | | |
 | used_at | timestamptz | YES | | | |
+| code_verifier_enc | bytea | YES | | | [FUTURE MIGRATION REQUIRED: PKCE Verifier] |
 
 **`projects`**
 | Column | Type | Nullable | Default | Constraints | Description |

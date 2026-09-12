@@ -56,8 +56,9 @@ A relational schema designed to support graph-like queries without the initial o
 DevTwin uses Supabase Auth for primary user authentication and a hybrid GitHub App flow for secure repository integration.
 - **Supabase Auth**: The frontend obtains a JWT which the backend cryptographically verifies using Supabase JWKS.
 - **Identity Mapping**: `auth.uid()` maps 1:1 to an internal `developers.auth_user_id`. Developer records are created explicitly via `POST /developers/me`.
-- **GitHub Integration**: Uses a GitHub App installation flow with user authorization. The authenticated GitHub user access token is used to verify that the user has access to the specified GitHub App installation (`GET /user/installations`). The temporary user token is never persisted.
+- **GitHub Integration**: Uses a hybrid GitHub App installation flow with user authorization and PKCE. The OAuth state is protected by an explicit atomic claim in PostgreSQL to prevent concurrent processing. The authenticated GitHub user access token verifies that the user has access to the specified GitHub App installation (`GET /user/installations`). The temporary user token is never persisted.
 - **GitHub Data Access**: Uses on-demand, short-lived installation access tokens. Persistent GitHub credentials are not stored in the database.
+- **Safe Disconnect**: The disconnect operation inactivates the connection but preserves historical DevTwin analysis data.
 
 ## Data Flow Pipeline
 
