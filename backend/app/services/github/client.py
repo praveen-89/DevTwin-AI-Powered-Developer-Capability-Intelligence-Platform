@@ -51,14 +51,14 @@ class GitHubClient:
         headers = {
             "Accept": "application/vnd.github.v3+json",
         }
-        
+
         # Add API version header for normal requests (not OAuth token exchange)
         if not is_oauth:
             headers["X-GitHub-Api-Version"] = "2026-03-10"
 
         if token:
             headers["Authorization"] = f"Bearer {token}"
-            
+
         full_url = url
         if not url.startswith("http"):
             base = self.oauth_base_url if is_oauth else self.base_url
@@ -81,7 +81,7 @@ class GitHubClient:
 
             if response.status_code == 429:
                 raise GitHubRateLimitError("GitHub API rate limit exceeded.")
-                
+
             response.raise_for_status()
             return response
 
@@ -95,7 +95,7 @@ class GitHubClient:
             elif e.response.status_code == 404:
                 raise GitHubHTTPError("GitHub resource not found.") from e
             raise GitHubHTTPError(f"GitHub API error: {e.response.status_code}") from e
-            
+
         except httpx.RequestError as e:
             logger.error("Network error communicating with GitHub: %s", type(e).__name__)
             raise GitHubNetworkError("Failed to communicate with GitHub.") from e
@@ -131,7 +131,7 @@ class GitHubClient:
             raise GitHubOAuthError("GitHub returned an OAuth error.")
 
         access_token = payload.get("access_token")
-        
+
         # Token type validation
         if not access_token or not isinstance(access_token, str):
             logger.error("Access token missing or invalid type in GitHub OAuth response.")
@@ -144,18 +144,18 @@ class GitHubClient:
         Gets the authenticated user's normalized information.
         """
         response = await self._request("GET", "/user", token=access_token)
-        
+
         try:
             payload = response.json()
         except ValueError as e:
             raise GitHubResponseError("Invalid JSON response from GitHub /user.") from e
-            
+
         github_id = payload.get("id")
         username = payload.get("login")
-        
+
         if github_id is None or username is None:
             raise GitHubResponseError("Missing required fields in GitHub user response.")
-            
+
         return GitHubUser(github_id=github_id, username=username)
 
     async def list_user_installations(self, access_token: str) -> List[GitHubInstallation]:
@@ -163,28 +163,28 @@ class GitHubClient:
         Lists GitHub App installations accessible to the authenticated user.
         """
         response = await self._request("GET", "/user/installations", token=access_token)
-        
+
         try:
             payload = response.json()
         except ValueError as e:
             raise GitHubResponseError("Invalid JSON response from GitHub /user/installations.") from e
-            
+
         installations_data = payload.get("installations", [])
         if not isinstance(installations_data, list):
             raise GitHubResponseError("Invalid installations format in GitHub response.")
-            
+
         installations = []
         for inst in installations_data:
             inst_id = inst.get("id")
             account = inst.get("account", {})
             acc_id = account.get("id")
             acc_login = account.get("login")
-            
+
             if inst_id is not None and acc_id is not None:
                 installations.append(GitHubInstallation(
                     installation_id=inst_id,
                     account_github_id=acc_id,
                     account_login=acc_login
                 ))
-                
+
         return installations
