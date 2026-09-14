@@ -90,9 +90,25 @@ async def test_exchange_oauth_code_missing_token(mock_post):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_token", [
+    None, 123, ["token"], {"access_token": "token"}, ""
+])
+@patch("app.services.github.client.httpx.AsyncClient.post", new_callable=AsyncMock)
+async def test_exchange_oauth_code_invalid_token_types(mock_post, invalid_token):
+    """Fails safely if access token is an invalid type or empty string."""
+    mock_request = httpx.Request("POST", "https://github.com/login/oauth/access_token")
+    mock_response = httpx.Response(200, json={"access_token": invalid_token}, request=mock_request)
+    mock_post.return_value = mock_response
+    
+    client = GitHubClient()
+    with pytest.raises(GitHubOAuthError):
+        await client.exchange_oauth_code("code", "verifier")
+
+
+@pytest.mark.asyncio
 @patch("app.services.github.client.httpx.AsyncClient.get", new_callable=AsyncMock)
 async def test_get_authenticated_user_success(mock_get):
-    """Parses authenticated user successfully."""
+    """Parses authenticated user successfully and sends API version."""
     mock_request = httpx.Request("GET", "https://api.github.com/user")
     mock_response = httpx.Response(200, json={"id": 89, "login": "praveen-89", "email": "test@test.com"}, request=mock_request)
     mock_get.return_value = mock_response
@@ -102,6 +118,11 @@ async def test_get_authenticated_user_success(mock_get):
     
     assert user.github_id == 89
     assert user.username == "praveen-89"
+    
+    # Assert header
+    mock_get.assert_called_once()
+    kwargs = mock_get.call_args.kwargs
+    assert kwargs["headers"]["X-GitHub-Api-Version"] == "2026-03-10"
 
 
 @pytest.mark.asyncio
@@ -120,7 +141,7 @@ async def test_get_authenticated_user_missing_fields(mock_get):
 @pytest.mark.asyncio
 @patch("app.services.github.client.httpx.AsyncClient.get", new_callable=AsyncMock)
 async def test_list_user_installations_success(mock_get):
-    """Parses user installations successfully."""
+    """Parses user installations successfully and sends API version."""
     mock_request = httpx.Request("GET", "https://api.github.com/user/installations")
     mock_response = httpx.Response(200, json={
         "total_count": 1,
@@ -140,6 +161,11 @@ async def test_list_user_installations_success(mock_get):
     assert installations[0].installation_id == 1001
     assert installations[0].account_github_id == 89
     assert installations[0].account_login == "praveen-89"
+    
+    # Assert header
+    mock_get.assert_called_once()
+    kwargs = mock_get.call_args.kwargs
+    assert kwargs["headers"]["X-GitHub-Api-Version"] == "2026-03-10"
 
 
 @pytest.mark.asyncio

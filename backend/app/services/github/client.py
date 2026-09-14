@@ -51,6 +51,11 @@ class GitHubClient:
         headers = {
             "Accept": "application/vnd.github.v3+json",
         }
+        
+        # Add API version header for normal requests (not OAuth token exchange)
+        if not is_oauth:
+            headers["X-GitHub-Api-Version"] = "2026-03-10"
+
         if token:
             headers["Authorization"] = f"Bearer {token}"
             
@@ -59,7 +64,8 @@ class GitHubClient:
             base = self.oauth_base_url if is_oauth else self.base_url
             full_url = f"{base}/{url.lstrip('/')}"
 
-        logger.debug("GitHub %s request to %s", method, full_url)
+        # Safe logging: only log method and path, not the full URL or query strings
+        logger.debug("GitHub %s request to %s", method, url)
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -81,7 +87,7 @@ class GitHubClient:
 
         except httpx.HTTPStatusError as e:
             # We don't log the body which might contain sensitive data in some cases
-            logger.error("GitHub HTTP error: %s on %s", e.response.status_code, full_url)
+            logger.error("GitHub HTTP error: %s on %s", e.response.status_code, url)
             if e.response.status_code == 401:
                 raise GitHubHTTPError("GitHub authentication failed.") from e
             elif e.response.status_code == 403:
@@ -125,9 +131,11 @@ class GitHubClient:
             raise GitHubOAuthError("GitHub returned an OAuth error.")
 
         access_token = payload.get("access_token")
-        if not access_token:
-            logger.error("Access token missing in GitHub OAuth response.")
-            raise GitHubOAuthError("Invalid OAuth response: missing access token.")
+        
+        # Token type validation
+        if not access_token or not isinstance(access_token, str):
+            logger.error("Access token missing or invalid type in GitHub OAuth response.")
+            raise GitHubOAuthError("Invalid OAuth response: missing or invalid access token.")
 
         return OAuthToken(access_token=access_token)
 
