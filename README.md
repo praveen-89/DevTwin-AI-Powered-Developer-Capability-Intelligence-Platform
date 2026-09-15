@@ -71,12 +71,36 @@ The Major roadmap will extend the platform to include the StudyTwin layer, featu
 - **Risk ≠ Competence**: CodeRisk findings are evidence signals, not blame verdicts.
 
 ## Current Project Status
-**Current Stage:** v0.1 — Developer Capability Intelligence Foundation
 
-**Status:** Backend foundation implemented and security hardened.
-**Database:** Supabase PostgreSQL connected.
-**RLS:** Security hardening completed for identified NULL ownership bypasses.
-**Tests:** 10/10 passing.
+**Current Stage:** v0.2 — GitHub App Integration Foundation
+
+---
+
+### ✅ IMPLEMENTED FOUNDATION
+
+| Area | Detail |
+|---|---|
+| FastAPI backend | Application factory, health endpoint, CORS |
+| Supabase PostgreSQL | Connected, schema managed via migrations |
+| RLS security hardening | NULL-ownership bypass patches applied |
+| Supabase JWT/JWKS verification | RS256, kid-based key lookup, algorithm allowlist |
+| Developer identity provisioning | `POST /developers/me` — upserts developer row from verified JWT sub |
+| GitHub App configuration | Settings validation for App ID, client credentials, private key, PKCE key |
+| GitHub App JWT generation | RS256, `iss`=App ID, 10-minute lifetime, safe exception handling |
+| GitHub OAuth/PKCE service layer | `exchange_oauth_code`, `get_authenticated_user`, `list_user_installations` |
+| PKCE verifier encryption utility | Fernet-based `encrypt_pkce_verifier` / `decrypt_pkce_verifier` (crypto.py) |
+| Migration 004 | `github_accounts`, `github_connection_states` schema |
+| Migration 005 | `code_verifier_enc` column, `developer_id` unique constraint, `disconnected_at` |
+| Test suite | **64 / 64 passing** |
+
+---
+
+### 🔜 NEXT IMPLEMENTATION STEP: GitHub Install/Callback Flow
+
+- `GET /github/install` — generate PKCE state, redirect to GitHub App install
+- `GET /github/callback` — verify state, exchange code, link GitHub account to developer
+- `GET /github/status` — return connection status for authenticated developer
+- `DELETE /github/disconnect` — soft-disconnect GitHub account
 
 **Current milestone:** v0.1 completed.
 **Next milestone:** v0.2 — GitHub Authentication & Repository Registration.
