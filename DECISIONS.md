@@ -1,7 +1,7 @@
 ---
 Status: Active
-Version: 1.1
-Last Updated: 2026-09-08
+Version: 1.2
+Last Updated: 2026-09-23
 Source of Truth: DECISIONS.md
 ---
 
@@ -112,14 +112,29 @@ Source of Truth: DECISIONS.md
 
 ## ADR-014: Authentication & Identity Architecture
 *   **Date**: 2026-09-10 (Revised 2026-09-12)
-*   **Status**: ACTIVE
-*   **Title**: Supabase Auth with JWKS and Hybrid GitHub App Flow (with PKCE)
+*   **Status**: SUPERSEDED by ADR-015 (PKCE clause removed)
+*   **Title**: Supabase Auth with JWKS and Hybrid GitHub App Flow
 *   **Context**: Securing DevTwin access and safely connecting GitHub repositories without exposing sensitive tokens.
-*   **Decision**: 
+*   **Decision**:
     1. Verify Supabase JWTs via JWKS instead of the legacy secret.
     2. Explicitly map developers via `POST /developers/me`.
-    3. Use a hybrid GitHub App flow with PKCE: require user authorization during App installation. The authenticated GitHub user access token is used to verify that the user has access to the specified GitHub App installation (`GET /user/installations`). The PKCE `code_verifier_enc` will be securely stored.
+    3. Use a hybrid GitHub App flow: require user authorization during App installation (`Request user authorization (OAuth) during installation` enabled). A secure random `state` token binds the callback to the developer who initiated the flow.
     4. Store only the `installation_id` in `github_accounts`. Do not persist user or installation access tokens.
     5. Maintain short-lived OAuth state with an explicit atomic claim mechanism in PostgreSQL (`github_connection_states`).
     6. Safe Disconnect: `DELETE /github/disconnect` removes the active connection but preserves historical analysis data.
-*   **Why This Decision**: It ensures cryptographically proven identity boundaries, eliminates persistent GitHub credentials, prevents installation ID spoofing, secures the OAuth flow with PKCE, mitigates concurrent state consumption, and safely retains analytical intelligence data after disconnect.
+*   **Why This Decision**: It ensures cryptographically proven identity boundaries, eliminates persistent GitHub credentials, prevents installation ID spoofing, mitigates concurrent state consumption, and safely retains analytical intelligence data after disconnect.
+*   **Superseded By**: ADR-015 clarifies the PKCE posture.
+
+## ADR-015: PKCE Removed from GitHub App Installation Flow
+*   **Date**: 2026-09-23
+*   **Status**: ACTIVE
+*   **Title**: GitHub /installations/new does not support PKCE; removed from install flow
+*   **Context**: During the Step 4 final audit, a verification search against current GitHub documentation and behavior confirmed that the GitHub App installation endpoint (`https://github.com/apps/<slug>/installations/new`) ignores PKCE parameters (`code_challenge`, `code_challenge_method`). These parameters are only processed by the dedicated OAuth authorization endpoint (`https://github.com/login/oauth/authorize`). Because `GET /github/install` redirects to `/installations/new`, any PKCE challenge appended to the URL is silently dropped by GitHub. The resulting authorization `code` is therefore never bound to the PKCE verifier, rendering the entire PKCE layer ineffective and creating false security confidence.
+*   **Decision**:
+    1. Remove `code_verifier` from `PendingOAuthState` (it was only used in the route to construct a challenge that GitHub ignored).
+    2. Remove PKCE challenge generation from `GET /github/install`.
+    3. Retain `code_verifier_enc` in the `github_connection_states` DB column and the `GitHubOAuthStateContext` dataclass for schema stability (avoids a migration). The stored value is harmless noise.
+    4. Rely on `client_secret` (confidential client) + `state` parameter (CSRF guard + developer-binding) as the security mechanism for the token exchange.
+*   **Alternatives Considered**:
+    - **2-step flow** (Option B): Redirect to `/login/oauth/authorize` with PKCE first, then redirect to `/installations/new` afterward. This supports PKCE properly but forces two separate GitHub consent screens, significantly degrading UX. Rejected for MVP scope.
+*   **Why This Decision**: DevTwin is a confidential client (server-side `client_secret` is never exposed). Per OAuth 2.1, PKCE is mandatory for public clients but defense-in-depth for confidential ones. The `state` parameter provides the same CSRF guarantee and developer-identity binding that PKCE would have added. Removing it eliminates dead code and eliminates false security confidence.

@@ -257,6 +257,9 @@ async def test_create_pending_state_inserts_correct_fields():
     assert isinstance(result, PendingOAuthState)
     assert isinstance(result.raw_state, str)
     assert len(result.raw_state) > 0
+    # code_verifier is intentionally absent from PendingOAuthState —
+    # GitHub's /installations/new does not support PKCE binding.
+    assert not hasattr(result, "code_verifier")
 
 
 @pytest.mark.asyncio

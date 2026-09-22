@@ -1,18 +1,23 @@
 """
-DevTwin Backend — GitHub OAuth State + PKCE Persistence Service
+DevTwin Backend — GitHub OAuth State Persistence Service
 
 Owns the transient OAuth state lifecycle:
-  1. generate_oauth_state()   — create cryptographically secure raw state + PKCE verifier
-  2. create_pending_state()   — INSERT an encrypted, hashed state row with TTL
+  1. generate_raw_state()     — create cryptographically secure random state token
+  2. create_pending_state()   — INSERT a hashed state row with TTL
   3. claim_state()            — atomically UPDATE ... RETURNING the pending row
-  4. (internal) decrypt verifier from the claimed row
 
 Security invariants enforced here:
   - Raw state is NEVER persisted (only SHA-256 hash stored).
-  - Raw PKCE verifier is NEVER persisted (only Fernet-encrypted bytes stored).
   - State is single-use: claim is an atomic UPDATE that sets used_at.
   - State has a TTL: claim rejects rows where expires_at <= NOW().
   - No raw secrets appear in logs.
+
+Note on code_verifier_enc column:
+  The `code_verifier_enc` DB column remains populated (a random encrypted value
+  is stored) to avoid a schema migration. It is not used in the install redirect
+  URL because GitHub's /installations/new endpoint does not support PKCE binding.
+  DevTwin is a confidential client and relies on client_secret + state (CSRF) for
+  secure token exchange.
 """
 
 from __future__ import annotations
@@ -81,6 +86,10 @@ class PendingOAuthState:
     The raw_state must be sent to GitHub as the OAuth `state` parameter.
     It is NOT persisted and must not be logged.
     The state_id is safe to log (UUID only).
+
+    Note: code_verifier is intentionally absent. GitHub's /installations/new
+    endpoint does not support PKCE binding. The verifier is generated and
+    stored internally (to keep the schema stable) but is not surfaced here.
     """
 
     raw_state: str          # sent to GitHub in the OAuth redirect URL
