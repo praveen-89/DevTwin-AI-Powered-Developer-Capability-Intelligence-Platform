@@ -30,11 +30,11 @@
 ### 2. GitHub Integration
 
 **`GET /github/install`**
-*   **Purpose**: Start the GitHub App connection flow with PKCE.
+*   **Purpose**: Start the GitHub App connection flow.
 *   **Response**: `{ "install_url": "string" }`
 
 **`GET /github/callback`**
-*   **Purpose**: Handle GitHub App installation redirect with user authorization. Implements atomic state claim and PKCE code exchange.
+*   **Purpose**: Handle GitHub App installation redirect with user authorization. Implements atomic state claim and code exchange.
 *   **Request**: `?code=&installation_id=&setup_action=install&state=`
 *   **Response**: 302 Redirect
 

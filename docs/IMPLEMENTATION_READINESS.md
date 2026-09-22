@@ -70,7 +70,7 @@ Last Updated: 2026-09-09
 1. Supabase Auth JWKS verification in FastAPI (IMPLEMENTED).
 2. `POST /developers/me` provisioning (IMPLEMENTED).
 3. Follow-up Migration (code_verifier_enc, UNIQUE(developer_id), disconnected_at).
-4. GitHub App config + PKCE encryption utility.
+4. GitHub App config + encryption utility.
 5. GitHub OAuth/App backend service.
 6. GitHub install & callback routes.
 7. Account-linking transaction policy.

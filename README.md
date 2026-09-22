@@ -85,19 +85,19 @@ The Major roadmap will extend the platform to include the StudyTwin layer, featu
 | RLS security hardening | NULL-ownership bypass patches applied |
 | Supabase JWT/JWKS verification | RS256, kid-based key lookup, algorithm allowlist |
 | Developer identity provisioning | `POST /developers/me` — upserts developer row from verified JWT sub |
-| GitHub App configuration | Settings validation for App ID, client credentials, private key, PKCE key |
+| GitHub App configuration | Settings validation for App ID, client credentials, private key |
 | GitHub App JWT generation | RS256, `iss`=App ID, 10-minute lifetime, safe exception handling |
-| GitHub OAuth/PKCE service layer | `exchange_oauth_code`, `get_authenticated_user`, `list_user_installations` |
-| PKCE verifier encryption utility | Fernet-based `encrypt_pkce_verifier` / `decrypt_pkce_verifier` (crypto.py) |
+| GitHub OAuth service layer | `exchange_oauth_code`, `get_authenticated_user`, `list_user_installations` |
+| Encryption utility | Fernet-based `encrypt_pkce_verifier` / `decrypt_pkce_verifier` (crypto.py, retained for schema stability) |
 | Migration 004 | `github_accounts`, `github_connection_states` schema |
 | Migration 005 | `code_verifier_enc` column, `developer_id` unique constraint, `disconnected_at` |
-| Test suite | **64 / 64 passing** |
+| Test suite | **103 / 103 passing** |
 
 ---
 
 ### 🔜 NEXT IMPLEMENTATION STEP: GitHub Install/Callback Flow
 
-- `GET /github/install` — generate PKCE state, redirect to GitHub App install
+- `GET /github/install` — generate state token, redirect to GitHub App install
 - `GET /github/callback` — verify state, exchange code, link GitHub account to developer
 - `GET /github/status` — return connection status for authenticated developer
 - `DELETE /github/disconnect` — soft-disconnect GitHub account
