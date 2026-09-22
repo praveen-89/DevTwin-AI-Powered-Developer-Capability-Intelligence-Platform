@@ -2,6 +2,7 @@
 DevTwin Backend — GitHub Exceptions
 """
 
+
 class GitHubIntegrationError(Exception):
     """Base class for all GitHub integration errors."""
     pass
@@ -34,4 +35,33 @@ class GitHubRateLimitError(GitHubHTTPError):
 
 class GitHubNetworkError(GitHubIntegrationError):
     """Raised for network or timeout issues communicating with GitHub."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# OAuth state lifecycle exceptions
+# ---------------------------------------------------------------------------
+
+class GitHubStateError(GitHubIntegrationError):
+    """Base class for OAuth state lifecycle errors."""
+    pass
+
+
+class GitHubStateNotFoundError(GitHubStateError):
+    """Raised when the provided state hash does not match any pending record."""
+    pass
+
+
+class GitHubStateExpiredError(GitHubStateError):
+    """Raised when the state has expired or has already been used."""
+    pass
+
+
+class GitHubStatePersistenceError(GitHubStateError):
+    """Raised when state cannot be persisted to the database."""
+    pass
+
+
+class GitHubStateDecryptionError(GitHubStateError):
+    """Raised when PKCE verifier decryption fails after a successful state claim."""
     pass
