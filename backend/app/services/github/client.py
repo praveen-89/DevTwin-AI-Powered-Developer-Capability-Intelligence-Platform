@@ -188,3 +188,34 @@ class GitHubClient:
                 ))
 
         return installations
+
+    async def get_installation(self, installation_id: int, app_jwt: str) -> GitHubInstallation:
+        """
+        Retrieves installation details using a GitHub App JWT.
+        Verifies that the installation_id belongs to the DevTwin GitHub App.
+        """
+        url = f"/app/installations/{installation_id}"
+        try:
+            response = await self._request("GET", url, token=app_jwt)
+            payload = response.json()
+        except GitHubHTTPError as e:
+            # If the installation doesn't exist or belongs to another app, GitHub returns 404
+            if "not found" in str(e).lower():
+                logger.warning(f"GitHub App Installation {installation_id} not found or inaccessible.")
+            raise
+        except ValueError as e:
+            raise GitHubResponseError("Invalid JSON response from GitHub /app/installations.") from e
+
+        inst_id = payload.get("id")
+        account = payload.get("account", {})
+        acc_id = account.get("id")
+        acc_login = account.get("login")
+
+        if inst_id is None or acc_id is None:
+            raise GitHubResponseError("Missing required fields in GitHub installation response.")
+
+        return GitHubInstallation(
+            installation_id=inst_id,
+            account_github_id=acc_id,
+            account_login=acc_login
+        )

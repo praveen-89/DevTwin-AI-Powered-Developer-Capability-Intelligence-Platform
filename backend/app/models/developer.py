@@ -11,9 +11,13 @@ Developer creation is handled explicitly by POST /developers/me (not yet impleme
 
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import UUID, DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from app.models.github_account import GitHubAccount
 
 
 from app.db.base import Base
@@ -49,6 +53,13 @@ class Developer(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    github_account: Mapped[Optional["GitHubAccount"]] = relationship(
+        "GitHubAccount",
+        back_populates="developer",
+        uselist=False,
+        cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

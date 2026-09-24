@@ -48,12 +48,32 @@ Last Updated: 2026-09-09
 
 ---
 
+## IMPLEMENTED (v0.2 — GitHub Auth & Installation)
+
+| Area | Status | Location |
+|---|---|---|
+| Supabase Auth JWKS verification | IMPLEMENTED | `backend/app/api/dependencies/auth.py` |
+| `POST /developers/me` provisioning | IMPLEMENTED | `backend/app/api/routes/developers.py` |
+| GitHub App configuration + PKCE encryption utility | IMPLEMENTED | `backend/app/core/config.py`, `backend/app/core/crypto.py` |
+| GitHub connection state model | IMPLEMENTED | `backend/app/models/github_connection_state.py` |
+| GitHub account model | IMPLEMENTED | `backend/app/models/github_account.py` |
+| `create_pending_state` / `claim_state` service | IMPLEMENTED | `backend/app/services/github/state.py` |
+| GitHub App JWT generation | IMPLEMENTED | `backend/app/services/github/auth.py` |
+| GitHub HTTP client (`get_installation`, etc.) | IMPLEMENTED | `backend/app/services/github/client.py` |
+| `GET /github/install` | IMPLEMENTED | `backend/app/api/routes/github.py` |
+| `GET /github/callback` | IMPLEMENTED | `backend/app/api/routes/github.py` |
+| GitHub account linking (first link, reconnect, conflict) | IMPLEMENTED | `backend/app/api/routes/github.py` |
+| Migration: `github_connection_states` + `github_accounts` | IMPLEMENTED | `database/migrations/004_v02_auth_github.sql`, `005_v02_github_pkce.sql` |
+| GitHub integration tests | IMPLEMENTED | `backend/tests/test_github.py`, `backend/tests/services/test_github_client.py` |
+
+---
+
 ## PENDING Implementation
 
 | Area | Status |
 |---|---|
-| GitHub App Hybrid integration | DESIGNED / READY |
-| Supabase Auth JWKS integration | DESIGNED / READY |
+| GET /github/status | NOT STARTED |
+| POST /github/disconnect | NOT STARTED |
 | Repository ingestion | NOT STARTED |
 | Repository mining workers | NOT STARTED |
 | SkillGraph engine | NOT STARTED |
@@ -66,14 +86,8 @@ Last Updated: 2026-09-09
 ---
 
 ## Next Milestone
-**v0.2 — GitHub Auth & Repository Registration**
-1. Supabase Auth JWKS verification in FastAPI (IMPLEMENTED).
-2. `POST /developers/me` provisioning (IMPLEMENTED).
-3. Follow-up Migration (code_verifier_enc, UNIQUE(developer_id), disconnected_at).
-4. GitHub App config + encryption utility.
-5. GitHub OAuth/App backend service.
-6. GitHub install & callback routes.
-7. Account-linking transaction policy.
-8. Status & disconnect endpoints.
-9. Security/regression tests for GitHub integration.
-10. Repository listing / installation access token service.
+**v0.2 remaining — GitHub Status & Disconnect + Repository Registration**
+1. `GET /github/status` endpoint.
+2. `POST /github/disconnect` endpoint.
+3. Repository listing / installation access token service.
+4. Repository registration and cloning.

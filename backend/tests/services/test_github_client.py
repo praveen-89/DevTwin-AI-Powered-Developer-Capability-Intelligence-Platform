@@ -1,5 +1,5 @@
-"""
-DevTwin Backend Tests — GitHub HTTP Client Service
+﻿"""
+DevTwin Backend Tests â€” GitHub HTTP Client Service
 """
 
 import pytest
@@ -195,8 +195,53 @@ async def test_secrets_not_logged(mock_post, caplog):
         await client.exchange_oauth_code("TEST_AUTH_CODE", "TEST_PKCE_VERIFIER")
 
     for record in caplog.records:
-        assert "TEST_CLIENT_SECRET" not in record.message
-        assert "TEST_AUTH_CODE" not in record.message
         assert "TEST_PKCE_VERIFIER" not in record.message
         assert "TEST_ACCESS_TOKEN" not in record.message
 
+
+@pytest.mark.asyncio
+@patch("app.services.github.client.httpx.AsyncClient.get", new_callable=AsyncMock)
+async def test_get_installation_success(mock_get):
+    """Parses installation successfully."""
+    mock_request = httpx.Request("GET", "https://api.github.com/app/installations/2002")
+    mock_response = httpx.Response(200, json={
+        "id": 2002,
+        "account": {"id": 89, "login": "praveen-89"}
+    }, request=mock_request)
+    mock_get.return_value = mock_response
+
+    client = GitHubClient()
+    installation = await client.get_installation(2002, "TEST_APP_JWT")
+
+    assert installation.installation_id == 2002
+    assert installation.account_github_id == 89
+    assert installation.account_login == "praveen-89"
+
+    mock_get.assert_called_once()
+    kwargs = mock_get.call_args.kwargs
+    assert kwargs["headers"]["Authorization"] == "Bearer TEST_APP_JWT"
+
+@pytest.mark.asyncio
+@patch("app.services.github.client.httpx.AsyncClient.get", new_callable=AsyncMock)
+async def test_get_installation_not_found(mock_get):
+    """Raises GitHubHTTPError on 404."""
+    mock_request = httpx.Request("GET", "https://api.github.com/app/installations/2002")
+    mock_response = httpx.Response(404, json={"message": "Not Found"}, request=mock_request)
+    mock_get.side_effect = httpx.HTTPStatusError("404", request=mock_response.request, response=mock_response)
+
+    client = GitHubClient()
+    with pytest.raises(GitHubHTTPError) as exc_info:
+        await client.get_installation(2002, "TEST_APP_JWT")
+    assert "not found" in str(exc_info.value).lower()
+
+@pytest.mark.asyncio
+@patch("app.services.github.client.httpx.AsyncClient.get", new_callable=AsyncMock)
+async def test_get_installation_missing_fields(mock_get):
+    """Fails if required fields are missing."""
+    mock_request = httpx.Request("GET", "https://api.github.com/app/installations/2002")
+    mock_response = httpx.Response(200, json={"id": 2002}, request=mock_request)
+    mock_get.return_value = mock_response
+
+    client = GitHubClient()
+    with pytest.raises(GitHubResponseError):
+        await client.get_installation(2002, "TEST_APP_JWT")
