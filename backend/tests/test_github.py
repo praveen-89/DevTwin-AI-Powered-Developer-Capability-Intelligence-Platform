@@ -1,4 +1,4 @@
-﻿"""
+"""
 DevTwin Backend Tests â€” GitHub Routes
 """
 
@@ -46,6 +46,7 @@ async def test_get_github_install_success(app):
         raw_state="test_raw_state_value_for_url",
         state_id=uuid.uuid4(),
         expires_at=datetime.now(timezone.utc),
+        code_verifier="test_verifier",
     )
 
     with patch("app.api.routes.github.create_pending_state", return_value=pending_state) as mock_create:
@@ -59,9 +60,9 @@ async def test_get_github_install_success(app):
     url = data["install_url"]
     # state must be present for CSRF protection and developer binding
     assert "state=test_raw_state_value_for_url" in url
-    # PKCE parameters must NOT be present â€” GitHub ignores them on /installations/new
-    assert "code_challenge" not in url
-    assert "code_challenge_method" not in url
+    # PKCE parameters must be present
+    assert "code_challenge=" in url
+    assert "code_challenge_method=S256" in url
     # Must point to the correct GitHub App slug
     assert "https://github.com/apps/app/installations/new" in url
 
@@ -90,218 +91,50 @@ async def test_get_github_install_persistence_error(app):
 
 
 @pytest.mark.asyncio
-async def test_callback_missing_state(app):
+async def test_callback_not_implemented(app):
+    """Callback route should return 501 until implemented."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        response = await client.get("/github/callback?installation_id=123")
-    assert response.status_code == 400
-    assert "Missing state" in response.json()["detail"]
-
+        response = await client.get("/github/callback?state=xyz&installation_id=123")
+    assert response.status_code == 501
+    assert "Callback not implemented yet" in response.json()["detail"]
 @pytest.mark.asyncio
-async def test_callback_missing_installation_id(app):
+async def test_pkce_invariant_same_verifier_used(app):
+    """
+    Verify that the code_challenge in the URL matches the S256 hash of the
+    plaintext verifier that gets encrypted and stored in the database.
+    """
+    import base64
+    import hashlib
+    from app.core.crypto import decrypt_pkce_verifier
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_session = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        response = await client.get("/github/callback?state=abc")
-    assert response.status_code == 400
-    assert "Missing installation_id" in response.json()["detail"]
-
-@pytest.mark.asyncio
-async def test_callback_invalid_state(app):
-    mock_session = AsyncMock()
-    app.dependency_overrides[get_db_session] = lambda: mock_session
-
-    from app.services.github.state import GitHubStateNotFoundError
-    with patch("app.api.routes.github.claim_state", side_effect=GitHubStateNotFoundError):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-            response = await client.get("/github/callback?state=invalid&installation_id=123")
-
-    assert response.status_code == 400
-    assert "Invalid state token" in response.json()["detail"]
-    app.dependency_overrides.clear()
-
-@pytest.mark.asyncio
-async def test_callback_expired_state(app):
-    mock_session = AsyncMock()
-    app.dependency_overrides[get_db_session] = lambda: mock_session
-
-    from app.services.github.state import GitHubStateExpiredError
-    with patch("app.api.routes.github.claim_state", side_effect=GitHubStateExpiredError):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-            response = await client.get("/github/callback?state=expired&installation_id=123")
-
-    assert response.status_code == 400
-    assert "State token expired or already used" in response.json()["detail"]
-    app.dependency_overrides.clear()
-
-@pytest.mark.asyncio
-async def test_callback_installation_verification_failed(app):
-    mock_session = AsyncMock()
-    app.dependency_overrides[get_db_session] = lambda: mock_session
-
-    from app.services.github.state import GitHubOAuthStateContext
-    from app.services.github.exceptions import GitHubHTTPError
-
-    claimed_state = GitHubOAuthStateContext(developer_id=uuid.uuid4(), code_verifier="verifier", state_id=uuid.uuid4())
-
-    mock_gh_instance = AsyncMock()
-    mock_gh_instance.get_installation.side_effect = GitHubHTTPError("404 Not Found")
-
-    with patch("app.api.routes.github.claim_state", return_value=claimed_state), \
-         patch("app.api.routes.github.generate_app_jwt", return_value="jwt"), \
-         patch("app.api.routes.github.GitHubClient", return_value=mock_gh_instance):
-
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-            response = await client.get("/github/callback?state=valid&installation_id=123")
-
-    assert response.status_code == 404
-    assert "GitHub App Installation not found" in response.json()["detail"]
-    app.dependency_overrides.clear()
-
-@pytest.mark.asyncio
-async def test_callback_success_first_time_link(app):
-    from unittest.mock import MagicMock
-    mock_session = AsyncMock()
-    mock_result = MagicMock()  # scalar_one_or_none is sync
-    mock_result.scalar_one_or_none.return_value = None
-    mock_session.execute.return_value = mock_result
-
-    app.dependency_overrides[get_db_session] = lambda: mock_session
-
-    from app.services.github.state import GitHubOAuthStateContext
-    from app.services.github.types import GitHubInstallation
-
-    dev_id = uuid.uuid4()
-    claimed_state = GitHubOAuthStateContext(developer_id=dev_id, code_verifier="verifier", state_id=uuid.uuid4())
-    installation = GitHubInstallation(installation_id=123, account_github_id=456, account_login="user")
-
-    mock_gh_instance = AsyncMock()
-    mock_gh_instance.get_installation.return_value = installation
-
-    with patch("app.api.routes.github.claim_state", return_value=claimed_state), \
-         patch("app.api.routes.github.generate_app_jwt", return_value="jwt"), \
-         patch("app.api.routes.github.GitHubClient", return_value=mock_gh_instance):
-
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-            response = await client.get("/github/callback?state=valid&installation_id=123")
+        response = await client.get("/github/install")
 
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
+    url = response.json()["install_url"]
+
+    from urllib.parse import urlparse, parse_qs
+    parsed_url = urlparse(url)
+    qs = parse_qs(parsed_url.query)
+
+    assert "code_challenge" in qs
+    code_challenge = qs["code_challenge"][0]
 
     mock_session.add.assert_called_once()
-    added_account = mock_session.add.call_args[0][0]
-    assert added_account.developer_id == dev_id
-    assert added_account.github_id == 456
-    assert added_account.username == "user"
-    assert added_account.installation_id == 123
+    added_row = mock_session.add.call_args[0][0]
+    encrypted_verifier = added_row.code_verifier_enc
 
-    mock_session.commit.assert_called_once()
-    app.dependency_overrides.clear()
+    plaintext_verifier = decrypt_pkce_verifier(encrypted_verifier)
 
-@pytest.mark.asyncio
-async def test_callback_success_reconnect(app):
-    from unittest.mock import MagicMock
-    mock_session = AsyncMock()
-    from app.models.github_account import GitHubAccount
-    dev_id = uuid.uuid4()
+    digest = hashlib.sha256(plaintext_verifier.encode("utf-8")).digest()
+    expected_challenge = base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
 
-    existing_account = GitHubAccount(
-        developer_id=dev_id, github_id=456, username="old_user", installation_id=111, disconnected_at=datetime.now()
-    )
-    mock_result = MagicMock()  # scalar_one_or_none is sync
-    mock_result.scalar_one_or_none.return_value = existing_account
-    mock_session.execute.return_value = mock_result
-
-    app.dependency_overrides[get_db_session] = lambda: mock_session
-
-    from app.services.github.state import GitHubOAuthStateContext
-    from app.services.github.types import GitHubInstallation
-
-    claimed_state = GitHubOAuthStateContext(developer_id=dev_id, code_verifier="verifier", state_id=uuid.uuid4())
-    installation = GitHubInstallation(installation_id=123, account_github_id=456, account_login="new_user")
-
-    mock_gh_instance = AsyncMock()
-    mock_gh_instance.get_installation.return_value = installation
-
-    with patch("app.api.routes.github.claim_state", return_value=claimed_state), \
-         patch("app.api.routes.github.generate_app_jwt", return_value="jwt"), \
-         patch("app.api.routes.github.GitHubClient", return_value=mock_gh_instance):
-
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-            response = await client.get("/github/callback?state=valid&installation_id=123")
-
-    assert response.status_code == 200
-    assert existing_account.installation_id == 123
-    assert existing_account.username == "new_user"
-    assert existing_account.disconnected_at is None
-
-    mock_session.commit.assert_called_once()
-    app.dependency_overrides.clear()
-
-@pytest.mark.asyncio
-async def test_callback_cross_developer_conflict(app):
-    from unittest.mock import MagicMock
-    mock_session = AsyncMock()
-    mock_result = MagicMock()  # scalar_one_or_none is sync
-    mock_result.scalar_one_or_none.return_value = None
-    mock_session.execute.return_value = mock_result
-
-    from sqlalchemy.exc import IntegrityError
-    mock_session.commit.side_effect = IntegrityError("statement", "params", "orig")
-
-    app.dependency_overrides[get_db_session] = lambda: mock_session
-
-    from app.services.github.state import GitHubOAuthStateContext
-    from app.services.github.types import GitHubInstallation
-
-    claimed_state = GitHubOAuthStateContext(developer_id=uuid.uuid4(), code_verifier="verifier", state_id=uuid.uuid4())
-    installation = GitHubInstallation(installation_id=123, account_github_id=456, account_login="user")
-
-    mock_gh_instance = AsyncMock()
-    mock_gh_instance.get_installation.return_value = installation
-
-    with patch("app.api.routes.github.claim_state", return_value=claimed_state), \
-         patch("app.api.routes.github.generate_app_jwt", return_value="jwt"), \
-         patch("app.api.routes.github.GitHubClient", return_value=mock_gh_instance):
-
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-            response = await client.get("/github/callback?state=valid&installation_id=123")
-
-    assert response.status_code == 409
-    assert "already linked to another developer" in response.json()["detail"]
-    mock_session.rollback.assert_called_once()
-    app.dependency_overrides.clear()
-
-@pytest.mark.asyncio
-async def test_callback_different_account_conflict(app):
-    from unittest.mock import MagicMock
-    mock_session = AsyncMock()
-    from app.models.github_account import GitHubAccount
-    dev_id = uuid.uuid4()
-
-    existing_account = GitHubAccount(
-        developer_id=dev_id, github_id=999, username="other_user", installation_id=111, disconnected_at=None
-    )
-    mock_result = MagicMock()  # scalar_one_or_none is sync
-    mock_result.scalar_one_or_none.return_value = existing_account
-    mock_session.execute.return_value = mock_result
-
-    app.dependency_overrides[get_db_session] = lambda: mock_session
-
-    from app.services.github.state import GitHubOAuthStateContext
-    from app.services.github.types import GitHubInstallation
-
-    claimed_state = GitHubOAuthStateContext(developer_id=dev_id, code_verifier="verifier", state_id=uuid.uuid4())
-    installation = GitHubInstallation(installation_id=123, account_github_id=456, account_login="user")
-
-    mock_gh_instance = AsyncMock()
-    mock_gh_instance.get_installation.return_value = installation
-
-    with patch("app.api.routes.github.claim_state", return_value=claimed_state), \
-         patch("app.api.routes.github.generate_app_jwt", return_value="jwt"), \
-         patch("app.api.routes.github.GitHubClient", return_value=mock_gh_instance):
-
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-            response = await client.get("/github/callback?state=valid&installation_id=123")
-
-    assert response.status_code == 409
-    assert "active GitHub account connected" in response.json()["detail"]
-    mock_session.rollback.assert_called_once()
+    assert code_challenge == expected_challenge
     app.dependency_overrides.clear()

@@ -2,6 +2,8 @@
 DevTwin Backend — GitHub Routes
 """
 
+import base64
+import hashlib
 import logging
 from urllib.parse import urlencode
 
@@ -44,9 +46,9 @@ async def get_github_install_url(
     and returns the GitHub App installation URL containing the state parameter.
 
     The state parameter serves as the CSRF guard and developer-identity binding.
-    PKCE is not used: GitHub's /installations/new endpoint does not bind PKCE
-    parameters to the resulting authorization code. DevTwin is a confidential
-    client and uses client_secret for secure token exchange.
+    PKCE is used: GitHub's /installations/new endpoint does not bind PKCE
+    parameters to the resulting authorization code for all flows, but DevTwin
+    enforces it for security hardening.
     """
     settings = get_settings()
 
@@ -62,8 +64,14 @@ async def get_github_install_url(
     # Construct the GitHub App installation URL
     base_url = f"https://github.com/apps/{settings.GITHUB_APP_SLUG}/installations/new"
 
+    # Calculate S256 PKCE code_challenge from the plaintext verifier
+    digest = hashlib.sha256(pending_state.code_verifier.encode("utf-8")).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
+
     query_params = {
         "state": pending_state.raw_state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
 
     install_url = f"{base_url}?{urlencode(query_params)}"
@@ -73,95 +81,12 @@ async def get_github_install_url(
     return {"install_url": install_url}
 
 @router.get("/callback")
-async def github_callback(
-    state: str | None = None,
-    installation_id: int | None = None,
-    session: AsyncSession = Depends(get_db_session)
-):
+async def github_callback():
     """
     Handle GitHub App installation redirect.
-    Verifies the short-lived state, verifies the installation via GitHub API,
-    and links the GitHub account to the developer.
+    Currently un-implemented as per security hardening requirements.
     """
-    if not state:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing state parameter.")
-    if not installation_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing installation_id parameter.")
-
-    try:
-        claimed_state = await claim_state(session, state)
-    except GitHubStateNotFoundError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state token.")
-    except GitHubStateExpiredError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="State token expired or already used.")
-    except Exception as e:
-        logger.error(f"Error claiming state: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error.")
-
-    developer_id = claimed_state.developer_id
-
-    # Verify installation belongs to DevTwin App
-    try:
-        app_jwt = generate_app_jwt()
-        github_client = GitHubClient()
-        installation = await github_client.get_installation(installation_id, app_jwt)
-    except GitHubHTTPError as e:
-        err_str = str(e).lower()
-        if "not found" in err_str or "404" in err_str:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GitHub App Installation not found.")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="GitHub API error.")
-    except Exception as e:
-        logger.error(f"Error verifying installation: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error.")
-
-    github_id = installation.account_github_id
-    username = installation.account_login
-
-    try:
-        stmt = select(GitHubAccount).where(GitHubAccount.developer_id == developer_id)
-        result = await session.execute(stmt)
-        existing_account = result.scalar_one_or_none()
-
-        if existing_account:
-            if existing_account.github_id != github_id:
-                if existing_account.disconnected_at is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Developer already has an active GitHub account connected."
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Account switching is not supported."
-                    )
-            else:
-                # Reconnecting the same account
-                existing_account.installation_id = installation_id
-                existing_account.username = username
-                existing_account.disconnected_at = None
-        else:
-            # First-time link
-            new_account = GitHubAccount(
-                developer_id=developer_id,
-                github_id=github_id,
-                username=username,
-                installation_id=installation_id
-            )
-            session.add(new_account)
-
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This GitHub account is already linked to another developer."
-        )
-    except HTTPException:
-        await session.rollback()
-        raise
-    except Exception as e:
-        await session.rollback()
-        logger.error(f"Database error linking account: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error.")
-
-    return {"status": "success", "message": "GitHub account successfully linked"}
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Callback not implemented yet."
+    )

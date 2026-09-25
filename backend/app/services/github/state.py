@@ -95,6 +95,7 @@ class PendingOAuthState:
     raw_state: str          # sent to GitHub in the OAuth redirect URL
     state_id: uuid.UUID     # safe to log
     expires_at: datetime    # informational: when the state expires
+    code_verifier: str      # returned to route to compute code_challenge
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +198,7 @@ async def create_pending_state(
         raw_state=raw_state,
         state_id=state_row.id,
         expires_at=expires_at,
+        code_verifier=plaintext_verifier,
     )
 
 
