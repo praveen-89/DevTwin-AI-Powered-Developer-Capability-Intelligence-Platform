@@ -9,6 +9,43 @@ Source of Truth: MEMORY.md
 
 *Source of Truth Context: This document defines durable, long-term project knowledge to quickly onboard future human and AI agents. It is NOT a changelog.*
 
+## Checkpoint Status
+
+CURRENT PROJECT:
+DevTwin — AI-Powered Developer Capability Intelligence Platform
+
+CURRENT PHASE:
+GitHub App Integration
+
+COMPLETED:
+- Steps 1–4A
+- GET /github/install
+- OAuth state/PKCE persistence
+- state claiming
+- S256 PKCE challenge
+- GitHub service layer
+- security hardening
+
+LATEST CHECKPOINT:
+ce4a2e0
+feat: harden github installation flow
+
+CURRENT STEP:
+Step 5A — OAuth Callback Foundation
+
+CURRENT TASK:
+state claim → PKCE decrypt → OAuth code exchange
+
+NOT YET IMPLEMENTED:
+- GitHub /user verification
+- /user/installations verification
+- installation ownership
+- account linking
+- status
+- disconnect
+- repositories
+- installation access tokens
+
 ## Project Identity
 **DevTwin** is an AI-powered Developer Capability Intelligence Platform that measures actual engineering capability based on verifiable repository artifacts, rejecting the flawed paradigm of static resumes and arbitrary multiple-choice tests.
 

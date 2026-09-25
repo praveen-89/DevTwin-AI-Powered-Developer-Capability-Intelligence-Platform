@@ -7,7 +7,7 @@ import hashlib
 import logging
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import get_current_developer
@@ -81,12 +81,70 @@ async def get_github_install_url(
     return {"install_url": install_url}
 
 @router.get("/callback")
-async def github_callback():
+async def github_callback(
+    state: str = Query(..., description="OAuth state from GitHub"),
+    code: str | None = Query(None, description="OAuth authorization code"),
+    error: str | None = Query(None, description="OAuth error from GitHub"),
+    session: AsyncSession = Depends(get_db_session)
+) -> dict:
     """
-    Handle GitHub App installation redirect.
-    Currently un-implemented as per security hardening requirements.
+    Handle GitHub App OAuth callback.
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Callback not implemented yet."
-    )
+    if error:
+        logger.warning("GitHub OAuth callback received an error response.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="GitHub OAuth authorization failed."
+        )
+
+    if not code:
+        logger.warning("GitHub OAuth callback received without code.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="GitHub OAuth authorization code missing."
+        )
+
+    try:
+        state_context = await claim_state(session, state)
+    except GitHubStateNotFoundError:
+        logger.warning("GitHub OAuth state rejected: unknown state.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OAuth state."
+        )
+    except GitHubStateExpiredError:
+        logger.warning("GitHub OAuth state rejected: expired or already used.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OAuth state."
+        )
+    except Exception:
+        logger.error("Unexpected error during OAuth state validation.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate OAuth state."
+        )
+
+    client = GitHubClient()
+    try:
+        # Token is purposefully discarded after this scope
+        _ = await client.exchange_oauth_code(
+            code=code,
+            code_verifier=state_context.code_verifier
+        )
+    except GitHubHTTPError:
+        logger.error("GitHub OAuth exchange failed.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to exchange authorization code with GitHub."
+        )
+    except Exception:
+        logger.error("Unexpected error during OAuth token exchange.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error during token exchange."
+        )
+
+    logger.info("GitHub OAuth callback received and exchange succeeded.")
+
+    return {"status": "success", "detail": "OAuth authorization successful."}

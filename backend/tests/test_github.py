@@ -91,12 +91,141 @@ async def test_get_github_install_persistence_error(app):
 
 
 @pytest.mark.asyncio
-async def test_callback_not_implemented(app):
-    """Callback route should return 501 until implemented."""
+async def test_github_callback_success(app):
+    """A valid state and code performs OAuth exchange and returns success."""
+    import uuid
+    from app.services.github.state import GitHubOAuthStateContext
+    from app.services.github.client import OAuthToken
+
+    mock_session = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    state_context = GitHubOAuthStateContext(
+        developer_id=uuid.uuid4(),
+        code_verifier="test_verifier",
+        state_id=uuid.uuid4(),
+    )
+
+    with patch("app.api.routes.github.claim_state", return_value=state_context) as mock_claim, \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code", return_value=OAuthToken(access_token="test_token")) as mock_exchange, \
+         patch("app.api.routes.github.GitHubClient.get_authenticated_user") as mock_get_user, \
+         patch("app.api.routes.github.GitHubClient.list_user_installations") as mock_list_installations:
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=valid_state&code=valid_code")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+
+        # Verify state is claimed
+        mock_claim.assert_awaited_once_with(mock_session, "valid_state")
+
+        # Verify verifier invariant
+        mock_exchange.assert_awaited_once_with(code="valid_code", code_verifier="test_verifier")
+
+        # Verify no token leak
+        assert "test_token" not in str(data)
+
+        # Verify no identity or installation calls
+        mock_get_user.assert_not_called()
+        mock_list_installations.assert_not_called()
+
+    app.dependency_overrides.clear()
+
+@pytest.mark.asyncio
+async def test_github_callback_oauth_error(app):
+    """An error from GitHub stops the flow."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        response = await client.get("/github/callback?state=xyz&installation_id=123")
-    assert response.status_code == 501
-    assert "Callback not implemented yet" in response.json()["detail"]
+        response = await client.get("/github/callback?state=xyz&error=access_denied")
+
+    assert response.status_code == 400
+    assert "GitHub OAuth authorization failed" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_github_callback_missing_code(app):
+    """Missing code with no error stops the flow."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/callback?state=xyz")
+
+    assert response.status_code == 400
+    assert "code missing" in response.json()["detail"].lower()
+
+@pytest.mark.asyncio
+async def test_github_callback_unknown_state(app):
+    """Unknown state is safely rejected."""
+    from app.services.github.state import GitHubStateNotFoundError
+
+    mock_session = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    with patch("app.api.routes.github.claim_state", side_effect=GitHubStateNotFoundError("Invalid OAuth state.")), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code") as mock_exchange:
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=unknown&code=xyz")
+
+        assert response.status_code == 400
+        assert "Invalid or expired OAuth state" in response.json()["detail"]
+        mock_exchange.assert_not_called()
+
+    app.dependency_overrides.clear()
+
+@pytest.mark.asyncio
+async def test_github_callback_expired_or_replayed_state(app):
+    """Expired or replayed state is safely rejected."""
+    from app.services.github.state import GitHubStateExpiredError
+
+    mock_session = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    with patch("app.api.routes.github.claim_state", side_effect=GitHubStateExpiredError("OAuth state is expired or already used.")), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code") as mock_exchange:
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=expired&code=xyz")
+
+        assert response.status_code == 400
+        assert "Invalid or expired OAuth state" in response.json()["detail"]
+        mock_exchange.assert_not_called()
+
+    app.dependency_overrides.clear()
+
+@pytest.mark.asyncio
+async def test_github_callback_exchange_failure(app, caplog):
+    """A failure during token exchange is sanitized and logged safely."""
+    import uuid
+    from app.services.github.state import GitHubOAuthStateContext
+    from app.services.github.exceptions import GitHubHTTPError
+    import logging
+
+    caplog.set_level(logging.DEBUG)
+
+    mock_session = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    state_context = GitHubOAuthStateContext(
+        developer_id=uuid.uuid4(),
+        code_verifier="secret_verifier_value",
+        state_id=uuid.uuid4(),
+    )
+
+    with patch("app.api.routes.github.claim_state", return_value=state_context), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code", side_effect=GitHubHTTPError("Exchange failed")):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=xyz&code=secret_code_value")
+
+        assert response.status_code == 502
+        assert "Failed to exchange authorization code" in response.json()["detail"]
+
+    # Check app logs for secret exposure (httpx request logs the URL, which we ignore)
+    app_logs = [record.message for record in caplog.records if record.name.startswith("app.")]
+    app_logs_text = " ".join(app_logs)
+    assert "secret_code_value" not in app_logs_text
+    assert "secret_verifier_value" not in app_logs_text
+
+    app.dependency_overrides.clear()
 @pytest.mark.asyncio
 async def test_pkce_invariant_same_verifier_used(app):
     """
