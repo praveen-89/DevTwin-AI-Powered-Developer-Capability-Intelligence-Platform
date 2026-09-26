@@ -21,7 +21,7 @@ from app.services.github.state import (
     GitHubStateNotFoundError,
     GitHubStateExpiredError,
 )
-from app.services.github.exceptions import GitHubStatePersistenceError, GitHubHTTPError
+from app.services.github.exceptions import GitHubStatePersistenceError, GitHubHTTPError, GitHubResponseError
 from app.services.github.client import GitHubClient
 from app.services.github.auth import generate_app_jwt
 
@@ -127,8 +127,7 @@ async def github_callback(
 
     client = GitHubClient()
     try:
-        # Token is purposefully discarded after this scope
-        _ = await client.exchange_oauth_code(
+        oauth_token = await client.exchange_oauth_code(
             code=code,
             code_verifier=state_context.code_verifier
         )
@@ -145,6 +144,172 @@ async def github_callback(
             detail="Internal error during token exchange."
         )
 
-    logger.info("GitHub OAuth callback received and exchange succeeded.")
+    try:
+        github_user = await client.get_authenticated_user(oauth_token.access_token)
+    except GitHubHTTPError:
+        logger.error("Failed to fetch GitHub user profile.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to verify GitHub identity."
+        )
+    except GitHubResponseError:
+        logger.error("Invalid response from GitHub user profile API.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Received malformed identity data from GitHub."
+        )
+    except Exception:
+        logger.error("Unexpected error fetching GitHub user.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error during identity verification."
+        )
 
-    return {"status": "success", "detail": "OAuth authorization successful."}
+    try:
+        installations = await client.list_user_installations(oauth_token.access_token)
+    except GitHubHTTPError:
+        logger.error("Failed to fetch GitHub user installations.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to verify GitHub installations."
+        )
+    except GitHubResponseError:
+        logger.error("Invalid response from GitHub installations API.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Received malformed installations data from GitHub."
+        )
+    except Exception:
+        logger.error("Unexpected error fetching GitHub installations.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error during installation verification."
+        )
+
+    # Discard OAuth token — it must not be persisted, logged, or returned.
+    # All identity information is already captured in github_user.
+    del oauth_token
+
+    # ------------------------------------------------------------------
+    # Step 5C — Account Linking
+    #
+    # Authoritative identities:
+    #   Developer  : state_context.developer_id   (from DB claim — not browser)
+    #   GitHub user: github_user.github_id / .username  (from GitHub API)
+    #
+    # installation_id is intentionally left NULL — persisted in a later step.
+    # ------------------------------------------------------------------
+
+    # Query for an existing github_accounts row by the GitHub-issued user ID.
+    result = await session.execute(
+        select(GitHubAccount).where(GitHubAccount.github_id == github_user.github_id)
+    )
+    existing_account: GitHubAccount | None = result.scalar_one_or_none()
+
+    if existing_account is None:
+        # Case 1 — No existing row: create a fresh, active GitHubAccount.
+        new_account = GitHubAccount(
+            developer_id=state_context.developer_id,
+            github_id=github_user.github_id,
+            username=github_user.username,
+            installation_id=None,
+            disconnected_at=None,
+        )
+        session.add(new_account)
+        try:
+            await session.commit()
+            await session.refresh(new_account)
+            logger.info("GitHub account linked successfully for developer.")
+        except IntegrityError:
+            await session.rollback()
+            # Race condition: another request inserted concurrently.
+            # Re-query to determine the correct case.
+            race_result = await session.execute(
+                select(GitHubAccount).where(
+                    GitHubAccount.github_id == github_user.github_id
+                )
+            )
+            race_account: GitHubAccount | None = race_result.scalar_one_or_none()
+            if race_account is None:
+                # The IntegrityError was not caused by a concurrent insert of this github_id.
+                # It must have been caused by the developer_id UNIQUE constraint.
+                # Let's verify this safely.
+                dev_check_result = await session.execute(
+                    select(GitHubAccount).where(
+                        GitHubAccount.developer_id == state_context.developer_id
+                    )
+                )
+                if dev_check_result.scalar_one_or_none() is not None:
+                    logger.warning("Developer already has a different GitHub account linked.")
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="You already have a linked GitHub account."
+                    )
+
+                logger.error("Unexpected state: IntegrityError but no row found after rollback.")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="An internal error occurred during account linking."
+                )
+
+            if race_account.developer_id == state_context.developer_id:
+                # Same developer won the race — treat as a reconnect.
+                race_account.username = github_user.username
+                race_account.disconnected_at = None
+                try:
+                    await session.commit()
+                    logger.info("GitHub account reconnected after race condition.")
+                except Exception:
+                    await session.rollback()
+                    logger.error("Failed to persist reconnect after race condition.")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="An internal error occurred during account linking."
+                    )
+            else:
+                # Different developer owns this GitHub account.
+                logger.warning("GitHub account conflict detected during race condition.")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This GitHub account is already linked to another developer."
+                )
+        except Exception:
+            await session.rollback()
+            logger.error("Unexpected database error during GitHub account creation.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An internal error occurred during account linking."
+            )
+
+    elif existing_account.developer_id == state_context.developer_id:
+        # Case 2 — Same developer: reconnect / reauthorization.
+        # Update mutable fields only. Do not touch historical data.
+        existing_account.username = github_user.username
+        existing_account.disconnected_at = None
+        try:
+            await session.commit()
+            logger.info("GitHub account reconnected for developer.")
+        except Exception:
+            await session.rollback()
+            logger.error("Unexpected database error during GitHub account reconnect.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An internal error occurred during account linking."
+            )
+
+    else:
+        # Case 3 — GitHub account belongs to a different developer.
+        # Sanitized 409 — no internal identifiers exposed.
+        logger.warning("GitHub account ownership conflict: account belongs to another developer.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This GitHub account is already linked to another developer."
+        )
+
+    logger.info("GitHub account linking complete.")
+
+    return {
+        "status": "success",
+        "detail": "GitHub account linked successfully.",
+        "github_username": github_user.username,
+    }

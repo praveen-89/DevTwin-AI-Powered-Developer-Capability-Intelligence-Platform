@@ -1,7 +1,7 @@
 ---
 Status: Active
-Version: 1.1
-Last Updated: 2026-09-08
+Version: 1.2
+Last Updated: 2026-09-26
 Source of Truth: MEMORY.md
 ---
 
@@ -17,6 +17,9 @@ DevTwin — AI-Powered Developer Capability Intelligence Platform
 CURRENT PHASE:
 GitHub App Integration
 
+⚠ DO NOT REIMPLEMENT STEP 4, STEP 5A, STEP 5B, OR STEP 5C.
+These are complete and must be treated as frozen.
+
 COMPLETED:
 - Steps 1–4A
 - GET /github/install
@@ -25,26 +28,50 @@ COMPLETED:
 - S256 PKCE challenge
 - GitHub service layer
 - security hardening
+- Step 5A: OAuth callback foundation
+- Step 5B: GitHub identity verification (get_authenticated_user)
+- Step 5B: GitHub installation verification (list_user_installations)
+- Step 5C: GitHub account linking
 
-LATEST CHECKPOINT:
-ce4a2e0
-feat: harden github installation flow
+CURRENT CHECKPOINT:
+Step 5C complete and committed
 
-CURRENT STEP:
-Step 5A — OAuth Callback Foundation
+NEXT STEP:
+Step 5D feature-selection checkpoint / architecture decision
 
-CURRENT TASK:
-state claim → PKCE decrypt → OAuth code exchange
+MIGRATIONS CHANGED: NO
+SCHEMA CHANGED: NO
+INSTALLATION_ID PERSISTED: NO (intentionally deferred to a later step)
+/github/status IMPLEMENTED: NO
+/github/disconnect IMPLEMENTED: NO
+INSTALLATION ACCESS TOKENS IMPLEMENTED: NO
+REPOSITORY REGISTRATION IMPLEMENTED: NO
+
+STEP 5C ACCOUNT LINKING — WHAT WAS IMPLEMENTED:
+- After OAuth token exchange and GitHub identity/installation verification:
+  - Query github_accounts WHERE github_id = github_user.github_id
+  - Case 1 (no row): INSERT new GitHubAccount with developer_id, github_id,
+    username; installation_id=NULL, disconnected_at=NULL
+  - Case 2 (same developer): UPDATE username, clear disconnected_at (reconnect)
+  - Case 3 (different developer): HTTP 409 Conflict (sanitized, no IDs exposed)
+  - IntegrityError race condition: rollback → re-query → resolve case
+  - OAuth token deleted immediately before DB operations
+  - Response: {status, detail, github_username} only — no token, no IDs
+- Developer identity source: state_context.developer_id (from DB claim, NOT browser)
+- GitHub identity source: github_user.github_id / .username (from GitHub API)
 
 NOT YET IMPLEMENTED:
-- GitHub /user verification
-- /user/installations verification
-- installation ownership
-- account linking
-- status
-- disconnect
-- repositories
+- installation_id persistence (intentionally deferred — schema has single nullable column, multiple installs possible)
+- /github/status
+- /github/disconnect
 - installation access tokens
+- repository registration
+- repository analysis
+
+NEXT STEP:
+Step 5D — installation_id persistence OR /github/status endpoint
+(Decide based on product priority — installation_id persistence is a prerequisite
+for any repository-level operations)
 
 ## Project Identity
 **DevTwin** is an AI-powered Developer Capability Intelligence Platform that measures actual engineering capability based on verifiable repository artifacts, rejecting the flawed paradigm of static resumes and arbitrary multiple-choice tests.
