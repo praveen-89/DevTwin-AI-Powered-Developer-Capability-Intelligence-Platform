@@ -8,6 +8,7 @@ import logging
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import get_current_developer
@@ -31,6 +32,13 @@ from sqlalchemy.exc import IntegrityError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/github", tags=["github"])
+
+
+class GitHubStatusResponse(BaseModel):
+    is_connected: bool
+    is_installed: bool
+    is_disconnected: bool
+    github_username: str | None
 
 
 @router.get("/install")
@@ -328,3 +336,46 @@ async def github_callback(
         "detail": "GitHub account linked successfully.",
         "github_username": github_user.username,
     }
+
+
+@router.get("/status", response_model=GitHubStatusResponse)
+async def get_github_status(
+    developer: Developer = Depends(get_current_developer),
+    session: AsyncSession = Depends(get_db_session)
+) -> GitHubStatusResponse:
+    """
+    Retrieve the current local GitHub connection status for the authenticated developer.
+    """
+    try:
+        query = select(GitHubAccount).where(GitHubAccount.developer_id == developer.id)
+        account = await session.scalar(query)
+    except Exception:
+        logger.error("Unexpected database error retrieving GitHub status.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred retrieving GitHub status."
+        )
+
+    if not account:
+        return GitHubStatusResponse(
+            is_connected=False,
+            is_installed=False,
+            is_disconnected=False,
+            github_username=None,
+        )
+
+    if account.disconnected_at is not None:
+        return GitHubStatusResponse(
+            is_connected=False,
+            is_installed=False,
+            is_disconnected=True,
+            github_username=account.username,
+        )
+
+    # Developer is connected
+    return GitHubStatusResponse(
+        is_connected=True,
+        is_installed=(account.installation_id is not None),
+        is_disconnected=False,
+        github_username=account.username,
+    )

@@ -1074,3 +1074,109 @@ async def test_github_callback_reconnect_preserves_installation_if_unchanged(app
         mock_session.commit.assert_awaited_once()
 
     app.dependency_overrides.clear()
+
+@pytest.mark.asyncio
+async def test_github_status_unauthenticated_returns_401(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/status")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_github_status_no_account_returns_not_connected(app):
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_session = AsyncMock()
+    mock_session.scalar.return_value = None
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_connected"] is False
+    assert data["is_installed"] is False
+    assert data["is_disconnected"] is False
+    assert data["github_username"] is None
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_status_account_without_installation(app):
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_session = AsyncMock()
+    from app.models.github_account import GitHubAccount
+    mock_account = GitHubAccount(developer_id=developer_id, username="devuser", installation_id=None, disconnected_at=None)
+    mock_session.scalar.return_value = mock_account
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_connected"] is True
+    assert data["is_installed"] is False
+    assert data["is_disconnected"] is False
+    assert data["github_username"] == "devuser"
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_status_account_with_installation(app):
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_session = AsyncMock()
+    from app.models.github_account import GitHubAccount
+    mock_account = GitHubAccount(developer_id=developer_id, username="devuser", installation_id=999, disconnected_at=None)
+    mock_session.scalar.return_value = mock_account
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_connected"] is True
+    assert data["is_installed"] is True
+    assert data["is_disconnected"] is False
+    assert data["github_username"] == "devuser"
+    assert "installation_id" not in data
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_status_disconnected_account(app):
+    from datetime import datetime, timezone
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_session = AsyncMock()
+    from app.models.github_account import GitHubAccount
+    mock_account = GitHubAccount(developer_id=developer_id, username="devuser", installation_id=None, disconnected_at=datetime.now(timezone.utc))
+    mock_session.scalar.return_value = mock_account
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_connected"] is False
+    assert data["is_installed"] is False
+    assert data["is_disconnected"] is True
+    assert data["github_username"] == "devuser"
+
+    app.dependency_overrides.clear()
