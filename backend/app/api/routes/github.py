@@ -190,14 +190,28 @@ async def github_callback(
     # All identity information is already captured in github_user.
     del oauth_token
 
+    personal_installation = next(
+        (
+            installation
+            for installation in installations
+            if installation.account_github_id == github_user.github_id
+        ),
+        None,
+    )
+
+    installation_id = (
+        personal_installation.installation_id
+        if personal_installation is not None
+        else None
+    )
+
     # ------------------------------------------------------------------
-    # Step 5C — Account Linking
+    # Step 5C/5D — Account Linking & Installation Persistence
     #
     # Authoritative identities:
     #   Developer  : state_context.developer_id   (from DB claim — not browser)
     #   GitHub user: github_user.github_id / .username  (from GitHub API)
-    #
-    # installation_id is intentionally left NULL — persisted in a later step.
+    #   Installation: installation_id (exact personal match only)
     # ------------------------------------------------------------------
 
     # Query for an existing github_accounts row by the GitHub-issued user ID.
@@ -212,7 +226,7 @@ async def github_callback(
             developer_id=state_context.developer_id,
             github_id=github_user.github_id,
             username=github_user.username,
-            installation_id=None,
+            installation_id=installation_id,
             disconnected_at=None,
         )
         session.add(new_account)
@@ -285,6 +299,7 @@ async def github_callback(
         # Case 2 — Same developer: reconnect / reauthorization.
         # Update mutable fields only. Do not touch historical data.
         existing_account.username = github_user.username
+        existing_account.installation_id = installation_id
         existing_account.disconnected_at = None
         try:
             await session.commit()

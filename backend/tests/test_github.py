@@ -581,8 +581,8 @@ async def test_github_callback_account_linking_no_installation_id(app):
     )
     # Even with multiple installations returned, installation_id must stay NULL
     mock_installations = [
-        GitHubInstallation(installation_id=111, account_github_id=10, account_login="org1"),
-        GitHubInstallation(installation_id=222, account_github_id=10, account_login="org2"),
+        GitHubInstallation(installation_id=111, account_github_id=99, account_login="org1"),
+        GitHubInstallation(installation_id=222, account_github_id=99, account_login="org2"),
     ]
     mock_user = GitHubUser(github_id=10, username="multiinstall")
 
@@ -894,4 +894,183 @@ async def test_pkce_invariant_same_verifier_used(app):
     expected_challenge = base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
 
     assert code_challenge == expected_challenge
+    app.dependency_overrides.clear()
+
+
+# ------------------------------------------------------------------
+# Step 5D — Installation Persistence Tests
+# ------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_github_callback_installation_exact_personal_match(app):
+    from app.services.github.state import GitHubOAuthStateContext
+    from app.services.github.client import OAuthToken, GitHubUser, GitHubInstallation
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_session = make_db_session(None)
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    state_context = GitHubOAuthStateContext(
+        developer_id=developer_id, code_verifier="test_verifier", state_id=uuid.uuid4()
+    )
+    mock_user = GitHubUser(github_id=123, username="devuser")
+
+    installations = [
+        GitHubInstallation(installation_id=456, account_github_id=123, account_login="devuser")
+    ]
+
+    with patch("app.api.routes.github.claim_state", return_value=state_context), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code", return_value=OAuthToken(access_token="tok")), \
+         patch("app.api.routes.github.GitHubClient.get_authenticated_user", return_value=mock_user), \
+         patch("app.api.routes.github.GitHubClient.list_user_installations", return_value=installations):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=s&code=c")
+
+        assert response.status_code == 200
+        added = mock_session.add.call_args[0][0]
+        assert added.installation_id == 456
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_callback_installation_multiple_with_one_personal(app):
+    from app.services.github.state import GitHubOAuthStateContext
+    from app.services.github.client import OAuthToken, GitHubUser, GitHubInstallation
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_session = make_db_session(None)
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    state_context = GitHubOAuthStateContext(
+        developer_id=developer_id, code_verifier="test_verifier", state_id=uuid.uuid4()
+    )
+    mock_user = GitHubUser(github_id=123, username="devuser")
+
+    installations = [
+        GitHubInstallation(installation_id=789, account_github_id=999, account_login="org"),
+        GitHubInstallation(installation_id=456, account_github_id=123, account_login="devuser")
+    ]
+
+    with patch("app.api.routes.github.claim_state", return_value=state_context), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code", return_value=OAuthToken(access_token="tok")), \
+         patch("app.api.routes.github.GitHubClient.get_authenticated_user", return_value=mock_user), \
+         patch("app.api.routes.github.GitHubClient.list_user_installations", return_value=installations):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=s&code=c")
+
+        assert response.status_code == 200
+        added = mock_session.add.call_args[0][0]
+        assert added.installation_id == 456
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_callback_installation_only_org_installations(app):
+    from app.services.github.state import GitHubOAuthStateContext
+    from app.services.github.client import OAuthToken, GitHubUser, GitHubInstallation
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_session = make_db_session(None)
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    state_context = GitHubOAuthStateContext(
+        developer_id=developer_id, code_verifier="test_verifier", state_id=uuid.uuid4()
+    )
+    mock_user = GitHubUser(github_id=123, username="devuser")
+
+    installations = [
+        GitHubInstallation(installation_id=789, account_github_id=999, account_login="org")
+    ]
+
+    with patch("app.api.routes.github.claim_state", return_value=state_context), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code", return_value=OAuthToken(access_token="tok")), \
+         patch("app.api.routes.github.GitHubClient.get_authenticated_user", return_value=mock_user), \
+         patch("app.api.routes.github.GitHubClient.list_user_installations", return_value=installations):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=s&code=c")
+
+        assert response.status_code == 200
+        added = mock_session.add.call_args[0][0]
+        assert added.installation_id is None
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_callback_installation_zero_installations(app):
+    from app.services.github.state import GitHubOAuthStateContext
+    from app.services.github.client import OAuthToken, GitHubUser
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_session = make_db_session(None)
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    state_context = GitHubOAuthStateContext(
+        developer_id=developer_id, code_verifier="test_verifier", state_id=uuid.uuid4()
+    )
+    mock_user = GitHubUser(github_id=123, username="devuser")
+
+    with patch("app.api.routes.github.claim_state", return_value=state_context), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code", return_value=OAuthToken(access_token="tok")), \
+         patch("app.api.routes.github.GitHubClient.get_authenticated_user", return_value=mock_user), \
+         patch("app.api.routes.github.GitHubClient.list_user_installations", return_value=[]):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=s&code=c")
+
+        assert response.status_code == 200
+        added = mock_session.add.call_args[0][0]
+        assert added.installation_id is None
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_callback_reconnect_preserves_installation_if_unchanged(app):
+    from app.services.github.state import GitHubOAuthStateContext
+    from app.services.github.client import OAuthToken, GitHubUser, GitHubInstallation
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    existing = GitHubAccount(
+        developer_id=developer_id,
+        github_id=123,
+        username="devuser",
+        installation_id=456,
+        disconnected_at=None,
+    )
+    mock_session = make_db_session(existing)
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    state_context = GitHubOAuthStateContext(
+        developer_id=developer_id, code_verifier="test_verifier", state_id=uuid.uuid4()
+    )
+    mock_user = GitHubUser(github_id=123, username="newname")
+
+    installations = [
+        GitHubInstallation(installation_id=456, account_github_id=123, account_login="newname")
+    ]
+
+    with patch("app.api.routes.github.claim_state", return_value=state_context), \
+         patch("app.api.routes.github.GitHubClient.exchange_oauth_code", return_value=OAuthToken(access_token="tok")), \
+         patch("app.api.routes.github.GitHubClient.get_authenticated_user", return_value=mock_user), \
+         patch("app.api.routes.github.GitHubClient.list_user_installations", return_value=installations):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=s&code=c")
+
+        assert response.status_code == 200
+        assert existing.installation_id == 456
+        assert existing.username == "newname"
+        mock_session.commit.assert_awaited_once()
+
     app.dependency_overrides.clear()
