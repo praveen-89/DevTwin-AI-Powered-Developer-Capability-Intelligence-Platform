@@ -4,4 +4,6 @@ from app.models.developer import Developer
 from app.models.github_connection_state import GitHubConnectionState
 from app.models.github_account import GitHubAccount
 
-__all__ = ["Developer", "GitHubConnectionState", "GitHubAccount", "Base"]
+from app.models.project import Project
+
+__all__ = ["Developer", "GitHubConnectionState", "GitHubAccount", "Project", "Base"]

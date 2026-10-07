@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from app.models.github_account import GitHubAccount
+    from app.models.project import Project
 
 
 from app.db.base import Base
@@ -59,6 +60,12 @@ class Developer(Base):
         "GitHubAccount",
         back_populates="developer",
         uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+    projects: Mapped[list["Project"]] = relationship(
+        "Project",
+        back_populates="developer",
         cascade="all, delete-orphan"
     )
 
