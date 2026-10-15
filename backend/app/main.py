@@ -17,6 +17,7 @@ from app.api.routes import health as health_router
 from app.api.routes import developers as developers_router
 from app.api.routes import github as github_router
 from app.api.routes import projects as projects_router
+from app.api.routes import repositories as repositories_router
 
 def create_app() -> FastAPI:
     """
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(developers_router.router)
     app.include_router(github_router.router)
     app.include_router(projects_router.router)
+    app.include_router(repositories_router.router)
 
     logger.info("Application startup complete.")
     return app

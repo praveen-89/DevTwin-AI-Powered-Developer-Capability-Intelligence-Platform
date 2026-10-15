@@ -89,12 +89,12 @@ class GitHubClient:
             # We don't log the body which might contain sensitive data in some cases
             logger.error("GitHub HTTP error: %s on %s", e.response.status_code, url)
             if e.response.status_code == 401:
-                raise GitHubHTTPError("GitHub authentication failed.") from e
+                raise GitHubHTTPError("GitHub authentication failed.", status_code=401) from e
             elif e.response.status_code == 403:
-                raise GitHubHTTPError("GitHub forbidden access.") from e
+                raise GitHubHTTPError("GitHub forbidden access.", status_code=403) from e
             elif e.response.status_code == 404:
-                raise GitHubHTTPError("GitHub resource not found.") from e
-            raise GitHubHTTPError(f"GitHub API error: {e.response.status_code}") from e
+                raise GitHubHTTPError("GitHub resource not found.", status_code=404) from e
+            raise GitHubHTTPError(f"GitHub API error: {e.response.status_code}", status_code=e.response.status_code) from e
 
         except httpx.RequestError as e:
             logger.error("Network error communicating with GitHub: %s", type(e).__name__)
@@ -219,3 +219,40 @@ class GitHubClient:
             account_github_id=acc_id,
             account_login=acc_login
         )
+
+    async def create_installation_access_token(self, installation_id: int, app_jwt: str) -> str:
+        """
+        Creates an ephemeral installation access token for a given GitHub App installation.
+        NEVER persist or log the returned token.
+        """
+        url = f"/app/installations/{installation_id}/access_tokens"
+        try:
+            response = await self._request("POST", url, token=app_jwt)
+            payload = response.json()
+        except GitHubHTTPError as e:
+            raise GitHubHTTPError(f"Failed to create installation access token: {e}", status_code=e.status_code) from e
+        except ValueError as e:
+            raise GitHubResponseError("Invalid JSON response from GitHub access tokens API.") from e
+
+        token = payload.get("token")
+        if not token or not isinstance(token, str):
+            raise GitHubResponseError("Missing or invalid token in GitHub access token response.")
+
+        return token
+
+    async def get_installation_repository(self, github_repo_id: int, installation_token: str) -> dict:
+        """
+        Fetches repository metadata by ID to verify it exists and is accessible
+        by the given installation token.
+        """
+        url = f"/repositories/{github_repo_id}"
+        try:
+            response = await self._request("GET", url, token=installation_token)
+            payload = response.json()
+            return payload
+        except GitHubHTTPError as e:
+            if e.status_code in (403, 404):
+                raise GitHubHTTPError("Repository not found or inaccessible.", status_code=e.status_code) from e
+            raise
+        except ValueError as e:
+            raise GitHubResponseError("Invalid JSON response from GitHub repositories API.") from e

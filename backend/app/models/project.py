@@ -9,6 +9,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.developer import Developer
+    from app.models.repository import Repository
 
 class Project(Base):
     """
@@ -40,6 +41,11 @@ class Project(Base):
     developer: Mapped["Developer"] = relationship(
         "Developer",
         back_populates="projects"
+    )
+
+    repositories: Mapped[list["Repository"]] = relationship(
+        "Repository",
+        back_populates="project"
     )
 
     def __repr__(self) -> str:
