@@ -52,25 +52,66 @@
 
 ### 3. Repositories
 
+**`POST /repositories`**
+*   **Purpose**: Register a GitHub repository under an owned project.
+*   **Authentication**: Required (Current Developer).
+*   **Request**: `{ "project_id": "uuid", "github_repo_id": 123456 }`
+*   **Response**: `201 Created`, `{ "id": "uuid", "project_id": "uuid", "github_repo_id": 123456, "name": "string", "full_name": "owner/repo", ... }`
+
 **`GET /repositories`**
-*   **Purpose**: List repositories tracked by the developer.
-*   **Response**: Array of repository metadata.
+*   **Purpose**: List repositories belonging to projects owned by the authenticated developer.
+*   **Authentication**: Required (Current Developer).
+*   **Query Parameters**: `project_id` (optional UUID filter). Validates ownership if provided.
+*   **Response**: `200 OK`, array of `RepositoryResponse` objects. Excludes unowned or NULL-project repositories.
+
+**`GET /repositories/{id}`**
+*   **Purpose**: Retrieve details for a single repository owned by the authenticated developer.
+*   **Authentication**: Required (Current Developer).
+*   **Response**: `200 OK`, `RepositoryResponse` object. Returns 404 for nonexistent or unowned repositories.
 
 **`GET /repositories/{id}/risks`**
-*   **Purpose**: Get CodeRisk findings.
+*   **Purpose**: Get CodeRisk findings (Pending future milestone).
 *   **Response**: Array of `risk_findings` objects.
 
-### 3. Analysis Pipeline
+### 4. Analysis Pipeline
 
 **`POST /analysis/jobs`**
-*   **Purpose**: Request a repository analysis.
-*   **Request**: `{ "repository_id": "uuid" }`
-*   **Response**: `{ "job_id": "uuid", "status": "QUEUED" }`
+*   **Purpose**: Submit a repository analysis job (Stage 1: Input -> Queue).
+*   **Authentication**: Required (Current Developer).
+*   **Request**: `{ "repository_id": "uuid" }` (Strict schema; unexpected extra fields rejected with 422).
+*   **Ownership Check**: Enforces that `repository_id` resolves to a project owned by the caller. Returns 404 if not found or unowned.
+*   **Execution Boundary**: Persists an `analysis_jobs` record in `QUEUED` state with `attempt_count=0`. Does not synchronously mine code or trigger background workers in this step.
+*   **Response**: `201 Created`
+    ```json
+    {
+      "id": "uuid",
+      "job_id": "uuid",
+      "status": "QUEUED"
+    }
+    ```
+*   **Errors**: `401 Unauthorized`, `404 Not Found`, `422 Unprocessable Entity`, `500 Internal Server Error`.
 
 **`GET /analysis/jobs/{id}`**
-*   **Purpose**: Poll the status of an analysis request.
-*   **Response**: `{ "id": "uuid", "status": "PROCESSING", "attempt_count": 1 }`
+*   **Purpose**: Poll or inspect status and metadata of an analysis job.
+*   **Authentication**: Required (Current Developer).
+*   **Ownership Check**: Enforces that the job's repository belongs to a project owned by the caller. Returns 404 if not found or unowned.
+*   **Response**: `200 OK`
+    ```json
+    {
+      "id": "uuid",
+      "job_id": "uuid",
+      "repository_id": "uuid",
+      "status": "QUEUED",
+      "attempt_count": 0,
+      "requested_at": "2026-10-16T19:00:00Z",
+      "completed_at": null
+    }
+    ```
+*   **Errors**: `401 Unauthorized`, `404 Not Found`, `500 Internal Server Error`.
 
 **`GET /analysis/jobs/{id}/runs`**
-*   **Purpose**: View execution attempts for a job.
-*   **Response**: Array of runs: `{ "id": "uuid", "status": "MINING|CODE_RISK|COMPLETED...", "error_code": null }`
+*   **Purpose**: View discrete execution attempts (`analysis_runs`) under an analysis job.
+*   **Authentication**: Required (Current Developer).
+*   **Ownership Check**: Enforces job ownership. Returns 404 if not found or unowned.
+*   **Response**: `200 OK`, array of `AnalysisRunResponse` objects (empty `[]` when queued prior to worker execution).
+*   **Errors**: `401 Unauthorized`, `404 Not Found`, `500 Internal Server Error`.

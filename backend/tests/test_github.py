@@ -378,7 +378,7 @@ async def test_github_callback_integrity_error_same_developer_race(app):
 
     mock_session = make_db_session([None, existing_after_race])
     # Simulate IntegrityError on first commit, success on second
-    mock_session.commit.side_effect = [SAIntegrityError("dup", None, None), None]
+    mock_session.commit.side_effect = [SAIntegrityError("dup", None, Exception("dup")), None]
     app.dependency_overrides[get_db_session] = lambda: mock_session
 
     state_context = GitHubOAuthStateContext(
@@ -421,7 +421,7 @@ async def test_github_callback_integrity_error_different_developer_race(app):
     )
 
     mock_session = make_db_session([None, existing_after_race])
-    mock_session.commit.side_effect = SAIntegrityError("dup", None, None)
+    mock_session.commit.side_effect = SAIntegrityError("dup", None, Exception("dup"))
     app.dependency_overrides[get_db_session] = lambda: mock_session
 
     state_context = GitHubOAuthStateContext(
@@ -466,7 +466,7 @@ async def test_github_callback_integrity_error_developer_uniqueness_conflict(app
     # Second call: None (during github_id check in the IntegrityError block)
     # Third call: existing_other_account (during developer_id check in the IntegrityError block)
     mock_session = make_db_session([None, None, existing_other_account])
-    mock_session.commit.side_effect = SAIntegrityError("dup", None, None)
+    mock_session.commit.side_effect = SAIntegrityError("dup", None, Exception("dup"))
     app.dependency_overrides[get_db_session] = lambda: mock_session
 
     state_context = GitHubOAuthStateContext(
@@ -1178,5 +1178,221 @@ async def test_github_status_disconnected_account(app):
     assert data["is_installed"] is False
     assert data["is_disconnected"] is True
     assert data["github_username"] == "devuser"
+
+    app.dependency_overrides.clear()
+
+
+# ===========================================================================
+# Step 5G — DELETE /github/disconnect Tests
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_github_disconnect_unauthenticated_returns_401(app):
+    """DELETE /github/disconnect without authentication returns 401."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.delete("/github/disconnect")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_github_disconnect_success(app):
+    """DELETE /github/disconnect sets disconnected_at and returns 204."""
+    from datetime import datetime, timezone
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.delete("/github/disconnect")
+
+    assert response.status_code == 204
+    assert mock_account.disconnected_at is not None
+    assert isinstance(mock_account.disconnected_at, datetime)
+    assert mock_account.disconnected_at.tzinfo is not None
+    mock_session.commit.assert_awaited_once()
+    mock_session.delete.assert_not_called()
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_disconnect_idempotent(app):
+    """DELETE /github/disconnect when already disconnected returns 204 without modifying disconnected_at."""
+    from datetime import datetime, timezone, timedelta
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    prior_disconnected_at = datetime.now(timezone.utc) - timedelta(days=1)
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=prior_disconnected_at,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.delete("/github/disconnect")
+
+    assert response.status_code == 204
+    assert mock_account.disconnected_at == prior_disconnected_at
+    mock_session.commit.assert_not_awaited()
+    mock_session.delete.assert_not_called()
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_disconnect_no_account_linked(app):
+    """DELETE /github/disconnect returns 400 when developer has no linked GitHub account."""
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.delete("/github/disconnect")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "No GitHub account linked."
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_disconnect_preserves_records(app):
+    """DELETE /github/disconnect never deletes GitHubAccount, projects, or repository rows."""
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.delete("/github/disconnect")
+
+    assert response.status_code == 204
+    # Ensure delete() is strictly never invoked on the database session
+    mock_session.delete.assert_not_called()
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_disconnect_reflected_in_status(app):
+    """GET /github/status reflects is_disconnected=True after disconnect."""
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    mock_session.scalar.return_value = mock_account
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        # First disconnect
+        disconnect_resp = await client.delete("/github/disconnect")
+        assert disconnect_resp.status_code == 204
+
+        # Then check status
+        status_resp = await client.get("/github/status")
+        assert status_resp.status_code == 200
+        data = status_resp.json()
+        assert data["is_connected"] is False
+        assert data["is_disconnected"] is True
+        assert data["is_installed"] is False
+        assert data["github_username"] == "devuser"
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_disconnect_db_error_returns_500(app):
+    """DELETE /github/disconnect returns 500 when database commit fails."""
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    mock_session.commit.side_effect = Exception("DB error during disconnect")
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.delete("/github/disconnect")
+
+    assert response.status_code == 500
+    assert "Failed to disconnect GitHub account." in response.json()["detail"]
+    mock_session.rollback.assert_awaited_once()
 
     app.dependency_overrides.clear()

@@ -16,12 +16,12 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 `Unit -> Integration -> System -> End-to-End`
 
 ## Backend Testing
-*   **Current Status**: `pytest -v` -> 10 passed, 0 warnings.
-*   **Scope**: Covers the v0.1 foundation, health checks, configuration, and includes a static security regression test for RLS NULL ownership bypasses.
-*   **API Tests**: Validate REST endpoints, payload shapes, and HTTP status codes using FastAPI test clients.
+*   **Current Status**: `pytest -q` -> 192 passed, 15 pre-existing mock warnings.
+*   **Scope**: Covers foundation, health checks, configuration, developer registration, projects, repositories (registration, listing, retrieval), GitHub connection/disconnect flows, analysis pipeline job submission/polling (`test_analysis.py`), and RLS NULL ownership regression guards.
+*   **API Tests**: Validate REST endpoints, payload shapes, ownership isolation, and HTTP status codes using FastAPI test clients.
 *   **Service Tests**: Isolate business logic from database boundaries.
 *   **Repository Mining Tests**: Run extractors against known mock repositories with predefined Git histories and file trees to ensure deterministic extraction.
-*   **Job & Run Lifecycle**: Verify that a failed `analysis_runs` attempt correctly increments retries on the `analysis_jobs` and correctly handles timeouts.
+*   **Job & Run Lifecycle**: Verify that job submission sets status to QUEUED and that discrete `analysis_runs` attempts track retries and error reporting.
 
 ## SkillGraph Testing
 *   **Entity Extraction**: Ensure correct parsing of technologies.

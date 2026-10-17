@@ -4,7 +4,7 @@ DevTwin Backend — Repository ORM Model
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import UUID, BigInteger, String, DateTime, ForeignKey, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -13,6 +13,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.project import Project
+    from app.models.analysis_job import AnalysisJob
 
 
 class Repository(Base):
@@ -76,6 +77,11 @@ class Repository(Base):
     project: Mapped[Optional["Project"]] = relationship(
         "Project",
         back_populates="repositories"
+    )
+    analysis_jobs: Mapped[List["AnalysisJob"]] = relationship(
+        "AnalysisJob",
+        back_populates="repository",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

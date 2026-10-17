@@ -3,6 +3,7 @@ DevTwin Backend — GitHub Routes
 """
 
 import base64
+from datetime import datetime, timezone
 import hashlib
 import logging
 from urllib.parse import urlencode
@@ -379,3 +380,49 @@ async def get_github_status(
         is_disconnected=False,
         github_username=account.username,
     )
+
+
+@router.delete("/disconnect", status_code=status.HTTP_204_NO_CONTENT)
+async def disconnect_github(
+    developer: Developer = Depends(get_current_developer),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """
+    Disconnect GitHub App integration for the authenticated developer.
+
+    Implements safe soft-disconnect per ADR-014: sets disconnected_at = NOW().
+    Preserves all historical repositories, projects, and analysis data.
+    Idempotent: if already disconnected, returns 204 No Content without re-updating.
+    """
+    try:
+        query = select(GitHubAccount).where(GitHubAccount.developer_id == developer.id)
+        result = await session.execute(query)
+        account = result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"Database error looking up GitHub account for disconnect: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred."
+        )
+
+    if not account:
+        logger.warning(f"Developer {developer.id} attempted to disconnect without linked GitHub account.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No GitHub account linked."
+        )
+
+    if account.disconnected_at is None:
+        account.disconnected_at = datetime.now(timezone.utc)
+        try:
+            await session.commit()
+            logger.info(f"GitHub account disconnected for developer {developer.id}.")
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Failed to disconnect GitHub account: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to disconnect GitHub account."
+            )
+
+    return None

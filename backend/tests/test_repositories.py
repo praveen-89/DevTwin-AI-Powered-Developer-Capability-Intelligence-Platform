@@ -15,6 +15,7 @@ from app.api.dependencies.auth import get_current_developer
 from app.db.connection import get_db_session
 from app.models.developer import Developer
 from app.models.project import Project
+from app.models.repository import Repository
 from app.models.github_account import GitHubAccount
 from app.services.github.exceptions import GitHubHTTPError, GitHubIntegrationError
 
@@ -439,4 +440,320 @@ async def test_create_repository_unrelated_integrity_error(MockGitHubClient, moc
     assert response.status_code == 500
     mock_session.rollback.assert_awaited_once()
     
+    app.dependency_overrides.clear()
+
+
+# ===========================================================================
+# GET /repositories Tests
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_list_repositories_unauthenticated(app):
+    """GET /repositories without Auth returns 401."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/repositories")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_repositories_empty(app, mock_developer):
+    """GET /repositories returns 200 and empty list when no repositories exist."""
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars().all.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/repositories")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_list_repositories_multiple_owned(app, mock_developer):
+    """GET /repositories returns only repositories in projects owned by the developer."""
+    proj_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    repo1 = Repository(
+        id=uuid.uuid4(),
+        project_id=proj_id,
+        github_repo_id=101,
+        owner_login="devtwin-org",
+        name="repo-alpha",
+        full_name="devtwin-org/repo-alpha",
+        url="https://github.com/devtwin-org/repo-alpha",
+        default_branch="main",
+        visibility="public",
+        synced_at=None,
+        created_at=now,
+    )
+    repo2 = Repository(
+        id=uuid.uuid4(),
+        project_id=proj_id,
+        github_repo_id=102,
+        owner_login="devtwin-org",
+        name="repo-beta",
+        full_name="devtwin-org/repo-beta",
+        url="https://github.com/devtwin-org/repo-beta",
+        default_branch="develop",
+        visibility="private",
+        synced_at=None,
+        created_at=now,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars().all.return_value = [repo1, repo2]
+    mock_session.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/repositories")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["name"] == "repo-alpha"
+    assert data[0]["full_name"] == "devtwin-org/repo-alpha"
+    assert data[0]["default_branch"] == "main"
+    assert data[0]["visibility"] == "public"
+    assert data[1]["name"] == "repo-beta"
+    assert data[1]["default_branch"] == "develop"
+    assert data[1]["visibility"] == "private"
+    # Ensure no token or secret leaked
+    assert "token" not in str(data).lower()
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_list_repositories_with_project_id_filter_success(app, mock_developer):
+    """GET /repositories?project_id=... filters repositories by the specified owned project."""
+    proj_id = uuid.uuid4()
+    mock_project = Project(id=proj_id, developer_id=mock_developer.id)
+    repo = Repository(
+        id=uuid.uuid4(),
+        project_id=proj_id,
+        github_repo_id=201,
+        owner_login="owner",
+        name="filtered-repo",
+        full_name="owner/filtered-repo",
+        url="https://github.com/owner/filtered-repo",
+        default_branch="main",
+        visibility="public",
+        synced_at=None,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    mock_session = AsyncMock()
+    # First query checks project ownership, second fetches filtered repositories
+    mock_proj_result = MagicMock()
+    mock_proj_result.scalar_one_or_none.return_value = mock_project
+
+    mock_repo_result = MagicMock()
+    mock_repo_result.scalars().all.return_value = [repo]
+
+    mock_session.execute.side_effect = [mock_proj_result, mock_repo_result]
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(f"/repositories?project_id={proj_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "filtered-repo"
+    assert data[0]["project_id"] == str(proj_id)
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_list_repositories_project_not_owned(app, mock_developer):
+    """GET /repositories?project_id=... returns 404 if project is not owned by developer."""
+    unowned_proj_id = uuid.uuid4()
+
+    mock_session = AsyncMock()
+    mock_proj_result = MagicMock()
+    mock_proj_result.scalar_one_or_none.return_value = None  # Not found or unowned
+    mock_session.execute.return_value = mock_proj_result
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(f"/repositories?project_id={unowned_proj_id}")
+
+    assert response.status_code == 404
+    assert "Project not found or not owned by developer." in response.json()["detail"]
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_list_repositories_db_error_returns_500(app, mock_developer):
+    """GET /repositories returns 500 when database fails."""
+    mock_session = AsyncMock()
+    mock_session.execute.side_effect = Exception("Database connection failure")
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/repositories")
+
+    assert response.status_code == 500
+    assert "Failed to fetch repositories." in response.json()["detail"]
+
+    app.dependency_overrides.clear()
+
+
+# ===========================================================================
+# GET /repositories/{id} Tests
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_repository_unauthenticated(app):
+    """GET /repositories/{id} without Auth returns 401."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(f"/repositories/{uuid.uuid4()}")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_repository_owned_success(app, mock_developer):
+    """GET /repositories/{id} returns 200 and repository details when owned."""
+    repo_id = uuid.uuid4()
+    proj_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    repo = Repository(
+        id=repo_id,
+        project_id=proj_id,
+        github_repo_id=301,
+        owner_login="owner",
+        name="single-repo",
+        full_name="owner/single-repo",
+        url="https://github.com/owner/single-repo",
+        default_branch="main",
+        visibility="public",
+        synced_at=None,
+        created_at=now,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = repo
+    mock_session.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(f"/repositories/{repo_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == str(repo_id)
+    assert data["project_id"] == str(proj_id)
+    assert data["name"] == "single-repo"
+    assert data["full_name"] == "owner/single-repo"
+    assert data["default_branch"] == "main"
+    assert data["visibility"] == "public"
+    assert "token" not in str(data).lower()
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_repository_nonexistent_returns_404(app, mock_developer):
+    """GET /repositories/{id} returns 404 when repository does not exist."""
+    random_id = uuid.uuid4()
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(f"/repositories/{random_id}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Repository not found."
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_repository_other_developer_returns_404(app, mock_developer):
+    """GET /repositories/{id} returns 404 when repository belongs to another developer's project."""
+    repo_id = uuid.uuid4()
+
+    mock_session = AsyncMock()
+    # The ownership query filters by Project.developer_id == developer.id, returning None
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(f"/repositories/{repo_id}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Repository not found."
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_repository_db_error_returns_500(app, mock_developer):
+    """GET /repositories/{id} returns 500 when database query errors."""
+    repo_id = uuid.uuid4()
+
+    mock_session = AsyncMock()
+    mock_session.execute.side_effect = Exception("DB connection timeout")
+
+    app.dependency_overrides[get_current_developer] = lambda: mock_developer
+    async def override_get_db_session():
+        yield mock_session
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(f"/repositories/{repo_id}")
+
+    assert response.status_code == 500
+    assert "Failed to fetch repository." in response.json()["detail"]
+
     app.dependency_overrides.clear()

@@ -5,9 +5,9 @@ DevTwin Backend — Repositories Routes
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -194,3 +194,86 @@ async def create_repository(
         )
 
     return new_repo
+
+
+@router.get("", response_model=List[RepositoryResponse])
+async def list_repositories(
+    project_id: Optional[uuid.UUID] = Query(default=None),
+    developer: Developer = Depends(get_current_developer),
+    session: AsyncSession = Depends(get_db_session)
+) -> List[Repository]:
+    """
+    List all repositories belonging to projects owned by the authenticated developer,
+    optionally filtered by project_id.
+    """
+    if project_id is not None:
+        proj_query = select(Project).where(
+            Project.id == project_id,
+            Project.developer_id == developer.id
+        )
+        project_result = await session.execute(proj_query)
+        project = project_result.scalar_one_or_none()
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found or not owned by developer."
+            )
+
+    query = (
+        select(Repository)
+        .join(Project, Repository.project_id == Project.id)
+        .where(Project.developer_id == developer.id)
+    )
+
+    if project_id is not None:
+        query = query.where(Repository.project_id == project_id)
+
+    query = query.order_by(Repository.created_at.asc())
+
+    try:
+        result = await session.execute(query)
+        repositories = result.scalars().all()
+        return list(repositories)
+    except Exception as e:
+        logger.error(f"Failed to list repositories: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch repositories."
+        )
+
+
+@router.get("/{id}", response_model=RepositoryResponse)
+async def get_repository(
+    id: uuid.UUID,
+    developer: Developer = Depends(get_current_developer),
+    session: AsyncSession = Depends(get_db_session)
+) -> Repository:
+    """
+    Retrieve details for a single repository owned by the authenticated developer.
+    """
+    query = (
+        select(Repository)
+        .join(Project, Repository.project_id == Project.id)
+        .where(
+            Repository.id == id,
+            Project.developer_id == developer.id
+        )
+    )
+
+    try:
+        result = await session.execute(query)
+        repository = result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"Failed to fetch repository {id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch repository."
+        )
+
+    if not repository:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    return repository

@@ -6,5 +6,16 @@ from app.models.github_account import GitHubAccount
 
 from app.models.project import Project
 from app.models.repository import Repository
+from app.models.analysis_job import AnalysisJob
+from app.models.analysis_run import AnalysisRun
 
-__all__ = ["Developer", "GitHubConnectionState", "GitHubAccount", "Project", "Repository", "Base"]
+__all__ = [
+    "Developer",
+    "GitHubConnectionState",
+    "GitHubAccount",
+    "Project",
+    "Repository",
+    "AnalysisJob",
+    "AnalysisRun",
+    "Base",
+]
