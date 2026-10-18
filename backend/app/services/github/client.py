@@ -256,3 +256,42 @@ class GitHubClient:
             raise
         except ValueError as e:
             raise GitHubResponseError("Invalid JSON response from GitHub repositories API.") from e
+
+    async def download_repository_archive(
+        self,
+        owner: str,
+        repo: str,
+        ref: str,
+        installation_token: str,
+    ) -> bytes:
+        """
+        Downloads a repository tarball archive from GitHub using an installation access token.
+        Follows redirects (e.g. codeload.github.com).
+        NEVER log or persist the installation token.
+        """
+        url = f"{self.base_url}/repos/{owner}/{repo}/tarball/{ref}"
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {installation_token}",
+            "X-GitHub-Api-Version": "2026-03-10",
+        }
+        logger.debug("Downloading repository archive for %s/%s at %s", owner, repo, ref)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+                response = await client.get(url, headers=headers)
+                if response.status_code == 429:
+                    raise GitHubRateLimitError("GitHub API rate limit exceeded.")
+                if response.status_code == 404:
+                    raise GitHubHTTPError("Repository or ref not found on GitHub.", status_code=404)
+                if response.status_code == 401:
+                    raise GitHubHTTPError("GitHub installation token authentication failed.", status_code=401)
+                if response.status_code == 403:
+                    raise GitHubHTTPError("Forbidden: Installation does not have access to repository.", status_code=403)
+                response.raise_for_status()
+                return response.content
+        except httpx.HTTPStatusError as e:
+            logger.error("GitHub HTTP error downloading archive: %s", e.response.status_code)
+            raise GitHubHTTPError(f"GitHub archive download failed: {e.response.status_code}", status_code=e.response.status_code) from e
+        except httpx.RequestError as e:
+            logger.error("Network error downloading repository archive: %s", type(e).__name__)
+            raise GitHubNetworkError("Failed to communicate with GitHub during archive download.") from e

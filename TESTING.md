@@ -16,9 +16,10 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 `Unit -> Integration -> System -> End-to-End`
 
 ## Backend Testing
-*   **Current Status**: `pytest -q` -> 192 passed, 15 pre-existing mock warnings.
-*   **Scope**: Covers foundation, health checks, configuration, developer registration, projects, repositories (registration, listing, retrieval), GitHub connection/disconnect flows, analysis pipeline job submission/polling (`test_analysis.py`), and RLS NULL ownership regression guards.
+*   **Current Status**: `pytest -q` -> 218 passed, 15 pre-existing mock warnings.
+*   **Scope**: Covers foundation, health checks, configuration, developer registration, projects, repositories (registration, listing, retrieval), GitHub connection/disconnect flows, analysis pipeline job submission/polling (`test_analysis.py`), worker runner queue claiming, attempt tracking, safe repository extraction, isolated temporary workspace lifecycle, non-terminal `FETCHING`/`PROCESSING` lifecycle state, repeated-invocation safety, and error sanitization (`test_worker.py`), and RLS NULL ownership regression guards.
 *   **API Tests**: Validate REST endpoints, payload shapes, ownership isolation, and HTTP status codes using FastAPI test clients.
+*   **Worker & Fetcher Tests**: Validate atomic queue claiming (`FOR UPDATE SKIP LOCKED`), maximum attempt bounding (`MAX_JOB_ATTEMPTS = 3`), non-terminal Stage 2 lifecycle preservation, repeated-invocation safety, Zip Slip / path traversal protection, corrupt archive recovery, ephemeral token cleanup, and sanitized error mapping.
 *   **Service Tests**: Isolate business logic from database boundaries.
 *   **Repository Mining Tests**: Run extractors against known mock repositories with predefined Git histories and file trees to ensure deterministic extraction.
 *   **Job & Run Lifecycle**: Verify that job submission sets status to QUEUED and that discrete `analysis_runs` attempts track retries and error reporting.
