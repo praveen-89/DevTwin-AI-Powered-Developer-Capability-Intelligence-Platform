@@ -36,6 +36,9 @@ from app.workers.fetcher import (
     fetch_repository_for_job,
     temporary_workspace,
 )
+from app.mining import mine_repository
+from app.skillgraph import persist_skillgraph
+from app.coderisk import persist_coderisk
 
 logger = logging.getLogger(__name__)
 
@@ -209,15 +212,82 @@ async def execute_job_run(
                 fetch_result.root_dir,
             )
 
-        # Stage 2 (Fetching) is completed for this execution attempt.
+            # Stage 3: Repository Mining begins
+            run.status = "MINING"
+            await session.commit()
+            await session.refresh(run)
+
+            mining_result = mine_repository(
+                root_dir=fetch_result.root_dir,
+                workspace_dir=workspace_dir,
+            )
+            logger.info(
+                "Successfully mined repository for job %s run %s: %d files, %d languages, %d manifests, %d AST files, %d warnings.",
+                job.id,
+                run.id,
+                mining_result.inventory.total_files,
+                len(mining_result.languages),
+                len(mining_result.manifests),
+                len(mining_result.ast_summaries),
+                len(mining_result.warnings),
+            )
+            run._mining_result = mining_result
+
+            # Stage 4: SkillGraph Mapping begins
+            run.status = "SKILL_GRAPH"
+            await session.commit()
+            await session.refresh(run)
+
+            graph_result = await persist_skillgraph(
+                session=session,
+                run=run,
+                repository_id=job.repository_id,
+                mining_result=mining_result,
+            )
+            run._skillgraph_result = graph_result
+            logger.info(
+                "Successfully mapped and persisted SkillGraph for job %s run %s: %d observations, %d languages, %d dependencies, %d tech, %d skills, %d concepts, %d edges.",
+                job.id,
+                run.id,
+                graph_result.observations_count,
+                graph_result.languages_count,
+                graph_result.dependencies_count,
+                graph_result.technologies_count,
+                graph_result.skills_count,
+                graph_result.concepts_count,
+                graph_result.edges_count,
+            )
+
+            # Stage 5: CodeRisk Analysis begins
+            run.status = "CODE_RISK"
+            await session.commit()
+            await session.refresh(run)
+
+            coderisk_result = await persist_coderisk(
+                session=session,
+                run=run,
+                repository_id=job.repository_id,
+                root_dir=fetch_result.root_dir,
+                mining_result=mining_result,
+            )
+            run._coderisk_result = coderisk_result
+            logger.info(
+                "Successfully executed and persisted CodeRisk for job %s run %s: %d findings (%s).",
+                job.id,
+                run.id,
+                coderisk_result.total_findings,
+                coderisk_result.findings_by_severity,
+            )
+
+        # Stage 5 (CodeRisk) is completed for this execution attempt.
         # Per docs/13_ANALYSIS_PIPELINE.md, COMPLETED is strictly reserved for Stage 8 (pipeline completion).
-        # In Step 6B, subsequent stages (Stage 3 Mining -> Stage 8 Completion) are deferred to Step 6C+.
-        # We do NOT falsely mark the job or run as COMPLETED because capability analysis has not run.
-        # The run remains in status 'FETCHING' and the job in 'PROCESSING' (both completed_at = None)
-        # awaiting Stage 3 handoff in Step 6C.
+        # In Step 6E, subsequent stages (Stage 6 Evidence -> Stage 8 Completion) are deferred to Step 6F+.
+        # We do NOT falsely mark the job or run as COMPLETED because evidence and capability analysis have not run.
+        # The run remains in status 'CODE_RISK' and the job in 'PROCESSING' (both completed_at = None)
+        # awaiting Stage 6 handoff in Step 6F.
         await session.commit()
         logger.info(
-            "Stage 2 (Fetching) succeeded for job %s run %s. Awaiting Stage 3 (Mining).",
+            "Stage 5 (CodeRisk) succeeded for job %s run %s. Awaiting Stage 6 (Evidence).",
             job.id,
             run.id,
         )

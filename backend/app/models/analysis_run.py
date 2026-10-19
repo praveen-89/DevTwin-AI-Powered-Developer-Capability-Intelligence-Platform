@@ -4,7 +4,7 @@ DevTwin Backend — AnalysisRun ORM Model
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import UUID, DateTime, ForeignKey, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,6 +14,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.analysis_job import AnalysisJob
     from app.models.repository import Repository
+    from app.models.observation import Observation
 
 
 class AnalysisRun(Base):
@@ -80,6 +81,11 @@ class AnalysisRun(Base):
     )
     repository: Mapped["Repository"] = relationship(
         "Repository",
+    )
+    observations: Mapped[List["Observation"]] = relationship(
+        "Observation",
+        back_populates="analysis_run",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

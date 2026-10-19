@@ -263,10 +263,11 @@ class GitHubClient:
         repo: str,
         ref: str,
         installation_token: str,
+        max_bytes: int = 50 * 1024 * 1024,
     ) -> bytes:
         """
         Downloads a repository tarball archive from GitHub using an installation access token.
-        Follows redirects (e.g. codeload.github.com).
+        Follows redirects (e.g. codeload.github.com) and streams chunks with size limit enforcement.
         NEVER log or persist the installation token.
         """
         url = f"{self.base_url}/repos/{owner}/{repo}/tarball/{ref}"
@@ -278,17 +279,40 @@ class GitHubClient:
         logger.debug("Downloading repository archive for %s/%s at %s", owner, repo, ref)
         try:
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-                response = await client.get(url, headers=headers)
-                if response.status_code == 429:
-                    raise GitHubRateLimitError("GitHub API rate limit exceeded.")
-                if response.status_code == 404:
-                    raise GitHubHTTPError("Repository or ref not found on GitHub.", status_code=404)
-                if response.status_code == 401:
-                    raise GitHubHTTPError("GitHub installation token authentication failed.", status_code=401)
-                if response.status_code == 403:
-                    raise GitHubHTTPError("Forbidden: Installation does not have access to repository.", status_code=403)
-                response.raise_for_status()
-                return response.content
+                async with client.stream("GET", url, headers=headers) as response:
+                    if response.status_code == 429:
+                        raise GitHubRateLimitError("GitHub API rate limit exceeded.")
+                    if response.status_code == 404:
+                        raise GitHubHTTPError("Repository or ref not found on GitHub.", status_code=404)
+                    if response.status_code == 401:
+                        raise GitHubHTTPError("GitHub installation token authentication failed.", status_code=401)
+                    if response.status_code == 403:
+                        raise GitHubHTTPError("Forbidden: Installation does not have access to repository.", status_code=403)
+                    response.raise_for_status()
+
+                    content_length = response.headers.get("content-length")
+                    if content_length:
+                        try:
+                            if int(content_length) > max_bytes:
+                                raise GitHubHTTPError(
+                                    f"Repository archive exceeds maximum download limit ({content_length} > {max_bytes} bytes).",
+                                    status_code=413,
+                                )
+                        except ValueError:
+                            pass
+
+                    chunks = []
+                    total_bytes = 0
+                    async for chunk in response.aiter_bytes():
+                        total_bytes += len(chunk)
+                        if total_bytes > max_bytes:
+                            raise GitHubHTTPError(
+                                f"Repository archive exceeds maximum download limit ({total_bytes} > {max_bytes} bytes).",
+                                status_code=413,
+                            )
+                        chunks.append(chunk)
+
+                    return b"".join(chunks)
         except httpx.HTTPStatusError as e:
             logger.error("GitHub HTTP error downloading archive: %s", e.response.status_code)
             raise GitHubHTTPError(f"GitHub archive download failed: {e.response.status_code}", status_code=e.response.status_code) from e

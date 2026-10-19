@@ -491,7 +491,7 @@ def test_sanitize_failure_mapping():
 
 @pytest.mark.asyncio
 async def test_execute_job_run_success():
-    """execute_job_run leaves job in PROCESSING and run in FETCHING awaiting Stage 3 on successful fetch."""
+    """execute_job_run transitions run to MINING and keeps job in PROCESSING awaiting Stage 4 on successful fetch & mine."""
     job_id = uuid.uuid4()
     repo_id = uuid.uuid4()
     job = AnalysisJob(id=job_id, repository_id=repo_id, status="PROCESSING", attempt_count=1)
@@ -505,18 +505,36 @@ async def test_execute_job_run_success():
         file_count=5,
     )
 
+    from app.mining.models import MiningResult, RepositoryInventory
+    mock_mining_result = MiningResult(
+        schema_version="1.0.0",
+        mining_version="1.0.0",
+        inventory=RepositoryInventory(5, 5, 0, 0, 1000, 1000),
+        languages=[],
+        manifests=[],
+        ast_summaries=[],
+        warnings=[],
+        completed_at=datetime.now(timezone.utc).isoformat(),
+    )
+
     with patch(
         "app.workers.runner.fetch_repository_for_job",
         new=AsyncMock(return_value=mock_fetch_result),
+    ), patch(
+        "app.workers.runner.mine_repository",
+        return_value=mock_mining_result,
     ):
         run = await execute_job_run(job, mock_session)
 
     # Per docs/13_ANALYSIS_PIPELINE.md, COMPLETED is reserved for Stage 8.
-    # In Step 6B, run remains FETCHING and job remains PROCESSING (completed_at is None) awaiting Stage 3.
-    assert run.status == "FETCHING"
+    # In Step 6E, run advances to CODE_RISK and job remains PROCESSING (completed_at is None) awaiting Stage 6.
+    assert run.status == "CODE_RISK"
     assert run.completed_at is None
     assert job.status == "PROCESSING"
     assert job.completed_at is None
+    assert getattr(run, "_mining_result", None) is not None
+    assert getattr(run, "_skillgraph_result", None) is not None
+    assert getattr(run, "_coderisk_result", None) is not None
     assert mock_session.commit.await_count >= 2
 
 
@@ -599,18 +617,37 @@ async def test_tokens_never_persisted_in_failure():
 # ===========================================================================
 
 
+class MockStreamContext:
+    def __init__(self, status_code=200, chunks=(b"fake tarball archive bytes",), headers=None):
+        self.status_code = status_code
+        self._chunks = chunks
+        self.headers = headers or {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import httpx
+            raise httpx.HTTPStatusError("error", request=None, response=MagicMock(status_code=self.status_code))
+
+    async def aiter_bytes(self):
+        for c in self._chunks:
+            yield c
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+
 @pytest.mark.asyncio
 async def test_download_repository_archive_success():
-    """download_repository_archive downloads archive bytes and follows redirects."""
+    """download_repository_archive streams archive bytes and follows redirects."""
     client = GitHubClient()
     tar_content = b"fake tarball archive bytes"
 
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.content = tar_content
-    mock_response.raise_for_status = MagicMock()
+    mock_ctx = MockStreamContext(status_code=200, chunks=(tar_content,))
 
-    with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=mock_response)) as mock_get:
+    with patch("httpx.AsyncClient.stream", return_value=mock_ctx) as mock_stream:
         data = await client.download_repository_archive(
             owner="myorg",
             repo="myrepo",
@@ -619,20 +656,19 @@ async def test_download_repository_archive_success():
         )
 
     assert data == tar_content
-    mock_get.assert_awaited_once()
-    # Check headers
-    called_headers = mock_get.call_args[1]["headers"]
+    mock_stream.assert_called_once()
+    called_headers = mock_stream.call_args[1]["headers"]
     assert called_headers["Authorization"] == "Bearer ghs_test_token"
-    assert "tarball/main" in mock_get.call_args[0][0]
+    assert "tarball/main" in mock_stream.call_args[0][1]
 
 
 @pytest.mark.asyncio
 async def test_download_repository_archive_rate_limit():
     """download_repository_archive raises GitHubRateLimitError on 429."""
     client = GitHubClient()
-    mock_response = MagicMock(status_code=429)
+    mock_ctx = MockStreamContext(status_code=429)
 
-    with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=mock_response)):
+    with patch("httpx.AsyncClient.stream", return_value=mock_ctx):
         with pytest.raises(GitHubRateLimitError):
             await client.download_repository_archive("o", "r", "main", "tok")
 
@@ -641,9 +677,21 @@ async def test_download_repository_archive_rate_limit():
 async def test_download_repository_archive_404():
     """download_repository_archive raises GitHubHTTPError on 404."""
     client = GitHubClient()
-    mock_response = MagicMock(status_code=404)
+    mock_ctx = MockStreamContext(status_code=404)
 
-    with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=mock_response)):
+    with patch("httpx.AsyncClient.stream", return_value=mock_ctx):
         with pytest.raises(GitHubHTTPError) as exc_info:
             await client.download_repository_archive("o", "r", "main", "tok")
         assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_download_repository_archive_exceeds_max_bytes():
+    """download_repository_archive raises GitHubHTTPError(413) when archive exceeds size limit."""
+    client = GitHubClient()
+    mock_ctx = MockStreamContext(status_code=200, chunks=(b"chunk1_100_bytes" * 10, b"chunk2_100_bytes" * 10))
+
+    with patch("httpx.AsyncClient.stream", return_value=mock_ctx):
+        with pytest.raises(GitHubHTTPError) as exc_info:
+            await client.download_repository_archive("o", "r", "main", "tok", max_bytes=50)
+        assert exc_info.value.status_code == 413

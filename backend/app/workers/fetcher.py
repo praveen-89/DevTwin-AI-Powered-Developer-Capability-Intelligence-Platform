@@ -145,17 +145,40 @@ def is_safe_tar_member(base_dir: Path, member: tarfile.TarInfo) -> bool:
     return True
 
 
+# Archive extraction safety limits
+MAX_EXTRACTED_MEMBERS = 10_000
+MAX_EXTRACTED_BYTES = 250 * 1024 * 1024  # 250 MB
+MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 def safe_extract_tar(archive_bytes: bytes, destination_dir: Path) -> Path:
     """
     Safely extracts a gzip-compressed tar archive into the destination directory.
-    Validates every member before extraction to prevent directory traversal.
+    Validates member counts, sizes, and paths to prevent directory traversal and decompression bombs.
     Returns the repository root path inside the destination.
     """
     try:
         fileobj = io.BytesIO(archive_bytes)
         with tarfile.open(fileobj=fileobj, mode="r:gz") as tar:
             members = tar.getmembers()
+            if len(members) > MAX_EXTRACTED_MEMBERS:
+                raise SecurityArchiveError(
+                    f"Archive exceeds maximum member count limit ({len(members)} > {MAX_EXTRACTED_MEMBERS})."
+                )
+
+            total_uncompressed = 0
             for member in members:
+                if member.isfile():
+                    if member.size > MAX_SINGLE_FILE_BYTES:
+                        raise SecurityArchiveError(
+                            f"Archive member exceeds single file size limit ({member.size} > {MAX_SINGLE_FILE_BYTES} bytes): {member.name}"
+                        )
+                    total_uncompressed += member.size
+                    if total_uncompressed > MAX_EXTRACTED_BYTES:
+                        raise SecurityArchiveError(
+                            f"Archive total uncompressed bytes exceed limit ({total_uncompressed} > {MAX_EXTRACTED_BYTES} bytes)."
+                        )
+
                 if not is_safe_tar_member(destination_dir, member):
                     logger.error("Blocked unsafe archive member: %s", member.name)
                     raise SecurityArchiveError(f"Archive contains illegal path traversal: {member.name}")

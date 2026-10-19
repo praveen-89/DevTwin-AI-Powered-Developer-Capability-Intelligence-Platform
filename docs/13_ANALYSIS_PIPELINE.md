@@ -97,12 +97,63 @@ If any stage fails, the worker logs the exception to `analysis_runs.error_messag
 - **Interrupted-Job Recovery & Operational Boundary**:
   - Abrupt worker process termination (e.g. SIGKILL or node abort) leaves claimed jobs in status `PROCESSING`. Because `analysis_jobs` currently lacks a lease deadline (`lease_expires_at`), heartbeat timestamp (`heartbeat_at`), or worker identifier (`worker_id`), automatic reclamation cannot safely distinguish between a stalled/crashed worker and a slow, live worker actively fetching a large repository. To prevent duplicate concurrent execution by live workers, automatic reclaiming is omitted in Step 6B.
   - *Prerequisite for automated recovery*: A future database migration adding `heartbeat_at TIMESTAMPTZ` or `lease_expires_at TIMESTAMPTZ` (or a distributed Redis lease key) to enable atomic stale-lease reaping without risking split-brain processing.
-- **Unimplemented in Step 6B**:
-  - Stage 3: Repository Mining (Linguist, dependency manifests, AST parsing).
-  - Stage 4: SkillGraph Mapping.
-  - Stage 5: CodeRisk Analysis.
-  - Stage 6: Evidence Generation.
-  - Stage 7: Capability & Skill Gap Calculation.
-  - Background distributed queue (Redis/Celery) remains deferred per design specifications.
+### Step 6C: Repository Mining Engine (Completed)
+- **Completed Components**:
+  - **Mining Module** (`backend/app/mining/`):
+    - **Safe File-Tree Traversal** (`traversal.py`): Traverses strictly within the isolated workspace boundary. Enforces conservative directory exclusions (`.git`, `node_modules`, `vendor`, `venv`, `build`, `dist`, `__pycache__`, etc.). Completely rejects symlinks and directory escapes. Detects binary files via null-byte inspection (`b'\x00'`). Enforces file count and total source byte budgets.
+    - **Language & File Classification** (`classification.py`): Deterministic extension-to-language mapping and special filename recognition. Calculates file counts, byte counts, and byte-weighted percentages sorted deterministically.
+    - **Defensive Manifest Extraction** (`manifests.py`): Extracts declared dependencies from `package.json` (npm), `requirements.txt` (pip), and `Cargo.toml` (cargo). Enforces 512 KB manifest file budget and 300 dependencies per manifest cap. Records sanitized `MiningWarning` entries on syntax or decode errors without aborting repository mining.
+    - **AST Parser Foundation** (`ast_parser.py`): Standard-library `ast.parse`-based Python AST parser extracting function declarations (async, arg count, docstrings), class declarations (bases, methods, docstrings), and imports (modules, aliases, line numbers). Non-executing and untrusted-source safe; syntax/indentation/recursion errors produce bounded warnings.
+    - **Coordinator Engine** (`engine.py`): Integrates traversal, classification, manifest parsing, and AST parsing into a validated, deterministically sorted `MiningResult` contract.
+  - **Archive & Resource Safety Hardening**:
+    - **Streaming Download** (`backend/app/services/github/client.py`): Implemented chunked streaming via `client.stream("GET", ...)` enforcing a 50 MB archive download limit, raising `GitHubHTTPError(status_code=413)` on violation.
+    - **Extraction Limits** (`backend/app/workers/fetcher.py`): Enforces 10,000 maximum archive members, 10 MB single-file size cap, and 250 MB total uncompressed bytes limit, preventing tar bomb and decompression vulnerabilities.
+  - **Worker Lifecycle Integration** (`backend/app/workers/runner.py`):
+    - Invokes `mine_repository` while the temporary workspace remains open.
+    - Status transitions: Updates `run.status = "MINING"` upon commencement. On successful completion, leaves `run.status = "MINING"` and `job.status = "PROCESSING"` (`completed_at = None`) in an honest non-terminal state awaiting Step 6D handoff.
+  - **Test Suite** (`backend/tests/test_mining.py`, `backend/tests/test_worker.py`):
+    - 44 tests across mining and worker runners verifying traversal exclusions, symlink protection, language metrics, manifest parsing, AST extraction, archive streaming/limits, and worker lifecycle integration.
+- **Unimplemented in Step 6C**:
+  - Stage 4: SkillGraph Mapping (taxonomic entity resolution, technology/concept graph linking).
+  - Stage 5: CodeRisk Analysis (AST static analysis, vulnerability/risk pattern detection).
+  - Stage 6: Evidence Generation (observation contextualization, reliability weighting).
+  - Stage 7: Capability & Skill Gap Calculation (mathematical scoring model).
+  - Stage 8: Pipeline Completion (`analysis_runs` -> `COMPLETED`, `analysis_jobs` -> `COMPLETED`).
+### Step 6D: SkillGraph Entity & Relationship Mapping (Completed)
+- **Completed Components**:
+  - **SkillGraph Models & Schema Alignment** (`backend/app/models/`):
+    - `Observation` ORM model (`observation.py`) mapping to `observations` table with JSONB `source_reference` and confidence scoring.
+    - `RepositoryLanguage` ORM model (`repository_language.py`) mapping to `repository_languages` with unique `(repository_id, language)`.
+    - `RepositoryDependency` ORM model (`repository_dependency.py`) mapping to `repository_dependencies` with unique `(repository_id, ecosystem, package_name)`.
+    - Taxonomy ORM models (`taxonomy.py`): `Skill`, `Technology`, `Concept`, `SkillTechnology`, `SkillConcept`, `TechnologyConcept`, `SkillRelationship`.
+  - **Deterministic SkillGraph Mapping Engine** (`backend/app/skillgraph/`):
+    - `taxonomy.py`: Curated, grounded taxonomy seed mappings for canonical languages (Python, TypeScript, JavaScript, Rust, Go, HTML, CSS, SQL, Shell, Dockerfile) and dependencies (FastAPI, Flask, Django, SQLAlchemy, Pydantic, pytest, HTTPX, Requests, Celery, Redis, React, Next.js, Express, Axios, Jest, Tailwind CSS, Tokio, Serde, Actix-web). Fallback to ungrounded library nodes without hallucinated skills or concepts.
+    - `mapper.py`: Pure in-memory transformation from `MiningResult` to `SkillGraphMapping`. Creates factual observations (`LANGUAGE_DETECTED`, `DEPENDENCY_FOUND`, `CLASS_DEFINED`, `FUNCTION_DEFINED`, `MODULE_IMPORTED`, `SYNTAX_ERROR_OBSERVED`, `MINING_WARNING`) with 100% source provenance.
+    - `service.py`: `persist_skillgraph` replaces repository language and dependency snapshots, batch-inserts observations linked to `analysis_runs.id`, and resolves/links global taxonomy nodes and edges.
+  - **Worker Pipeline Integration** (`backend/app/workers/runner.py`):
+    - Transitions `run.status = "SKILL_GRAPH"` upon Stage 4 commencement.
+    - Invokes `persist_skillgraph` and binds `run._skillgraph_result`.
+    - Leaves `run.status = "SKILL_GRAPH"` and `job.status = "PROCESSING"` (`completed_at = None`) in an honest non-terminal state awaiting Step 6E.
+  - **Test Suite** (`backend/tests/test_skillgraph.py`):
+    - 14 tests verifying token normalization, language mapping, known/unknown dependency resolution, AST symbol mapping, parse error handling, warning observations, empty repository handling, entity deduplication, database persistence, and worker status lifecycle.
+### Step 6E: CodeRisk Engine & Static Analysis (Completed)
+- **Completed Components**:
+  - **CodeRisk Models & Schema Alignment** (`backend/app/models/`):
+    - `RiskFinding` ORM model (`risk_finding.py`) mapping to `risk_findings` table with check constraints for category (`SECURITY`, `RELIABILITY`, `TESTING`, `MAINTAINABILITY`, `DEPENDENCY`, `ARCHITECTURE`), severity (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), confidence (`0..1`), and mandatory `observation_id` foreign key.
+  - **Deterministic Static Risk Analysis Engine** (`backend/app/coderisk/`):
+    - `rules.py`: Grounded rule catalog (`SEC-001` Hardcoded Secret Literal, `SEC-002` Arbitrary Code Execution Construct, `SEC-003` Insecure Object Deserialization, `REL-001` Bare Except Clause, `REL-002` Silent Exception Swallowing, `MAINT-001` Excessive Parameter Count, `MAINT-002` Syntax Parse Failure, `TEST-001` Missing Test Suite).
+    - `analyzer.py`: Non-executing AST and static analysis engine. Performs safe file inspections within bounded budgets (500 files, 512 KB per file limit). Redacts secrets from evidence snippets to prevent credential leaks.
+    - `service.py`: `persist_coderisk` executes static analysis, replaces previous repository risk finding snapshots, pairs each finding with an immutable `Observation(type="RISK_OBSERVED")`, and flushes transactionally.
+  - **Worker Pipeline Integration** (`backend/app/workers/runner.py`):
+    - Transitions `run.status = "CODE_RISK"` upon Stage 5 commencement.
+    - Invokes `persist_coderisk` within the temporary workspace lifecycle.
+    - Binds `run._coderisk_result`.
+    - Leaves `run.status = "CODE_RISK"` and `job.status = "PROCESSING"` (`completed_at = None`) in an honest non-terminal state awaiting Step 6F.
+  - **Test Suite** (`backend/tests/test_coderisk.py`):
+    - 16 tests verifying positive/negative detection across all rules, placeholder suppression, secret redaction, deterministic ordering, empty/binary file safety, transaction rollback, and worker status lifecycle.
+- **Unimplemented in Step 6E**:
+  - Stage 6: Evidence Generation (observation contextualization, reliability weighting, polarity assignment).
+  - Stage 7: Capability & Skill Gap Calculation (mathematical scoring model).
+  - Stage 8: Pipeline Completion (`analysis_runs` -> `COMPLETED`, `analysis_jobs` -> `COMPLETED`).
 - **Next Milestone**:
-  - **Step 6C — Repository Mining Engine**: Implementation of deterministic file tree analysis, language detection, dependency manifest parsing, and AST extraction from the fetched workspace.
+  - **Step 6F — Evidence Generation & Observation Contextualization**: Mapping factual observations and risk findings to contextualized evidence with type, strength, and polarity.
