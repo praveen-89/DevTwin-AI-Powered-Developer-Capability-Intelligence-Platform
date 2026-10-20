@@ -129,6 +129,47 @@ class PythonRiskASTVisitor(ast.NodeVisitor):
                 )
             )
 
+        # SEC-002: subprocess with shell=True
+        is_subprocess_call = False
+        subprocess_func_name = "subprocess"
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "subprocess"
+            and node.func.attr in ("Popen", "run", "call", "check_call", "check_output")
+        ):
+            is_subprocess_call = True
+            subprocess_func_name = f"subprocess.{node.func.attr}"
+        elif (
+            isinstance(node.func, ast.Name)
+            and node.func.id in ("Popen", "run", "call", "check_call", "check_output")
+            and "subprocess" in self._imported_modules
+        ):
+            is_subprocess_call = True
+            subprocess_func_name = node.func.id
+
+        if is_subprocess_call:
+            has_shell_true = any(
+                kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+                for kw in node.keywords
+            )
+            if has_shell_true:
+                rule = RULES["SEC-002"]
+                self.findings.append(
+                    CodeRiskFinding(
+                        rule_id=rule.rule_id,
+                        category=rule.category,
+                        severity=rule.severity,
+                        confidence=rule.confidence,
+                        title=rule.title,
+                        explanation=f"Subprocess execution with shell=True via '{subprocess_func_name}()'.",
+                        file_path=self.rel_path,
+                        line_start=node.lineno,
+                        line_end=getattr(node, "end_lineno", node.lineno),
+                        evidence_snippet=f"{subprocess_func_name}(..., shell=True)",
+                    )
+                )
+
         # SEC-003: pickle.load or pickle.loads
         if (
             isinstance(node.func, ast.Attribute)

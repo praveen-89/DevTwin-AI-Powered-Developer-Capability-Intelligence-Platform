@@ -493,6 +493,9 @@ async def test_execute_job_run_transitions_to_mining_and_preserves_processing_st
     with patch(
         "app.workers.runner.fetch_repository_for_job",
         new=AsyncMock(return_value=mock_fetch_result),
+    ), patch(
+        "app.workers.runner.persist_capabilities",
+        new=AsyncMock(return_value=__import__('app.capability.models', fromlist=['CapabilityResult']).CapabilityResult(total_targets=0)),
     ):
         with patch("app.workers.runner.temporary_workspace") as mock_ws:
             # Context manager yielding tmp_path
@@ -504,8 +507,8 @@ async def test_execute_job_run_transitions_to_mining_and_preserves_processing_st
             mock_ws.side_effect = dummy_ws
             run = await execute_job_run(job, mock_session)
 
-    # In Step 6E, run reaches CODE_RISK, job is PROCESSING, both completed_at are None
-    assert run.status == "CODE_RISK"
+    # Step 6G: run reaches CAPABILITY, job is PROCESSING, both completed_at are None
+    assert run.status == "CAPABILITY"
     assert run.completed_at is None
     assert job.status == "PROCESSING"
     assert job.completed_at is None
@@ -516,4 +519,6 @@ async def test_execute_job_run_transitions_to_mining_and_preserves_processing_st
     assert run._skillgraph_result is not None
     assert hasattr(run, "_coderisk_result")
     assert run._coderisk_result is not None
+    assert hasattr(run, "_capability_result")
+    assert run._capability_result is not None
     assert mock_session.commit.await_count >= 2

@@ -150,10 +150,70 @@ If any stage fails, the worker logs the exception to `analysis_runs.error_messag
     - Binds `run._coderisk_result`.
     - Leaves `run.status = "CODE_RISK"` and `job.status = "PROCESSING"` (`completed_at = None`) in an honest non-terminal state awaiting Step 6F.
   - **Test Suite** (`backend/tests/test_coderisk.py`):
-    - 16 tests verifying positive/negative detection across all rules, placeholder suppression, secret redaction, deterministic ordering, empty/binary file safety, transaction rollback, and worker status lifecycle.
-- **Unimplemented in Step 6E**:
-  - Stage 6: Evidence Generation (observation contextualization, reliability weighting, polarity assignment).
-  - Stage 7: Capability & Skill Gap Calculation (mathematical scoring model).
+    - 19 tests verifying positive/negative detection across all rules (including subprocess shell=True detection for SEC-002), placeholder suppression, secret redaction, deterministic ordering, empty/binary file safety, run-scoped idempotency without orphaning parent observations (D-1 fix), transaction rollback, and worker status lifecycle.
+- **Defect Resolutions in Step 6F**:
+  - **D-1 (Orphaned CodeRisk Observations)**: Scoped CodeRisk deletion strictly to `analysis_run_id == run.id` for both `RiskFinding` and parent `Observation(type="RISK_OBSERVED")`. Prevents cross-run observation orphaning while providing complete idempotency for reruns on the same run.
+  - **D-2 (SEC-002 Subprocess Detection)**: Added safe AST keyword argument inspection for `subprocess.Popen/run/call/check_call/check_output(..., shell=True)` with positive and negative test coverage, and updated the rule description in `rules.py`.
+
+### Step 6F: Evidence Generation Engine (Completed)
+- **Completed Components**:
+  - **Evidence Models & Schema Alignment** (`backend/app/models/`):
+    - `Evidence` ORM model (`evidence.py`) mapping to `evidence` table with check constraints for type (`MENTION`, `USAGE`, `APPLIED_ENGINEERING`, `DEMONSTRATED_OUTCOME`), strength (`0..1`), directness (`0..1`), reliability (`0..1`), and polarity (`-1..1`).
+    - Junction ORM models (`evidence.py`): `EvidenceSkill` (`evidence_skills`), `EvidenceTechnology` (`evidence_technologies`), `EvidenceConcept` (`evidence_concepts`).
+    - Bidirectional relationships between `Observation` and `Evidence` with cascade deletion.
+  - **Deterministic Evidence Mapping Engine** (`backend/app/evidence/`):
+    - `models.py`: Defines `EvidenceItemData` and `EvidenceResult` transfer contracts.
+    - `mapper.py`: Deterministically maps grounded observations to evidence items:
+      - `DEPENDENCY_FOUND`: Mapped to `MENTION` (strength 0.20, directness 0.80, reliability 0.90, polarity +1.0) with dependency taxonomy resolution. Does not falsely imply developer proficiency from package manifest presence.
+      - `MODULE_IMPORTED`: Mapped to `USAGE` (strength 0.50, directness 1.0, reliability 0.95, polarity +1.0) resolving base module technologies and concepts.
+      - `LANGUAGE_DETECTED`: Substantive usage (>=5% or >=2 files) mapped to `USAGE` (strength 0.40); incidental presence (<5%) mapped to `MENTION` (strength 0.20).
+      - `CLASS_DEFINED`: Mapped to `APPLIED_ENGINEERING` (strength 0.80, directness 0.90, reliability 0.95, polarity +1.0) linking Concept `Object-Oriented Programming`.
+      - `FUNCTION_DEFINED`: Async functions mapped to `APPLIED_ENGINEERING` (strength 0.70, Concept `Asynchronous Programming`); documented functions mapped to `APPLIED_ENGINEERING` (strength 0.60, Concept `Code Documentation`); basic functions mapped to `USAGE` (strength 0.40).
+      - `RISK_OBSERVED`: Mapped to negative polarity evidence (`-1.0` for CRITICAL, `-0.8` for HIGH, `-0.5` for MEDIUM, `-0.2` for LOW) with severity-weighted strength (`0.80` down to `0.20`), linking category-specific concepts (`Secure Coding`, `Error Handling`, `Automated Testing`, `Code Maintainability`). Fulfills rule that Risk ≠ Competence (negative evidence weight, not score overwrite).
+      - Pure pipeline diagnostic warnings (`MINING_WARNING`, `SYNTAX_ERROR_OBSERVED`): Retained in raw observations table for auditability, but explicitly excluded from capability evidence generation.
+    - `service.py`: `persist_evidence` fetches observations for the current run, idempotently clears prior evidence for the run's observations, resolves taxonomy entity IDs, batch-inserts `evidence` and junction rows, and flushes transactionally.
+  - **Worker Pipeline Integration** (`backend/app/workers/runner.py`):
+    - Invokes `persist_evidence` immediately following CodeRisk static analysis.
+    - Binds `run._evidence_result`.
+    - Leaves `run.status = "CODE_RISK"` and `job.status = "PROCESSING"` (`completed_at = None`) in an honest non-terminal state awaiting Step 6G (Stage 7: Capability Scoring).
+  - **Test Suite** (`backend/tests/test_evidence.py`):
+    - 13 hermetic unit and integration tests verifying observation mapping across all types, unknown library handling, substantive vs. incidental language thresholds, class/function engineering signals, negative risk polarity weighting, diagnostic omission, run-level idempotency, transactional rollback, and worker runner integration.
+- **Unimplemented in Step 6F**:
+  - Stage 7: Capability & Skill Gap Calculation.
+  - Stage 8: Pipeline Completion (`analysis_runs` -> `COMPLETED`, `analysis_jobs` -> `COMPLETED`).
+
+### Step 6G: Capability Scoring Engine (Completed)
+- **Completed Components**:
+  - **Capability Models & Schema Alignment** (`backend/app/models/capability.py`, `backend/app/models/__init__.py`):
+    - `DeveloperCapability` ORM model mapping to `developer_capabilities` with Exclusive Arc check constraint (`CHECK (num_nonnulls(skill_id, technology_id, concept_id) = 1)`), score bounds `[0.0, 1.0]`, confidence bounds `[0.0, 1.0]`, unique target constraint `capability_unique_target`.
+    - `CapabilityHistory` ORM model mapping to append-only `capability_history` tracking run-by-run score snapshots with run attribution (`analysis_run_id`). (Note: absolute snapshot scores are persisted; score and confidence deltas are computed at query time / in-memory, not as stored database columns).
+    - `SkillGap` ORM model mapping to `skill_gaps` table.
+  - **Capability Transfer Contracts** (`backend/app/capability/models.py`):
+    - `TargetCapabilityScore`: Per-target calculated score, confidence, delta values, evidence count, and positive/negative evidence counts. Validates Exclusive Arc upon instantiation.
+    - `CapabilityResult`: Summary container with `total_targets`, `scores` map, `avg_score`, `avg_confidence`, and `history_records_created`.
+  - **Deterministic Capability Model v1 Math** (`backend/app/capability/scorer.py`):
+    - Evidence weighting: `w_i = S_i * D_i * R_i * T_i * P_i` where:
+      - `S_i`: Persisted fine-grained evidence strength (`0.0..1.0`, e.g. `CLASS_DEFINED`=0.80, `async`=0.70, `docstring`=0.60, `plain`=0.40, risk severity=0.80..0.20) with fallback to type-strength hierarchy (`MENTION`=0.20, `USAGE`=0.45, `APPLIED_ENGINEERING`=0.70, `DEMONSTRATED_OUTCOME`=1.00) if missing.
+      - `D_i`: Directness (`0.0..1.0`).
+      - `R_i`: Reliability (`0.0..1.0`).
+      - `T_i`: Half-life temporal decay (`exp(-ln(2) * age_days / 365)`).
+      - `P_i`: Polarity (`-1.0..+1.0`).
+    - Diminishing returns: rank-ordered decay `w_k / sqrt(k)`.
+    - Sigmoid non-linear saturation: `score = clamp(1 / (1 + exp(-sum / 3.0)), 0.01, 0.99)`.
+    - Confidence calculation: `confidence = clamp(q * d * c * R_mean, 0.05, 0.98)` incorporating quantity saturation factor `q = 1 - exp(-N / 5)`, diversity factor `d`, temporal consistency `c`, and mean evidence reliability `R_mean`.
+  - **Capability Persistence Service** (`backend/app/capability/service.py`):
+    - `persist_capabilities`: Resolves developer via `run -> repository -> project -> developer_id`, aggregates evidence across junction entities (`skills`, `technologies`, `concepts`), deletes previous `capability_history` for `analysis_run_id` for idempotency, upserts `DeveloperCapability` (PostgreSQL `ON CONFLICT DO UPDATE` with fallback SELECT+UPDATE for SQLite/mock environments), and appends `CapabilityHistory`.
+  - **Worker Pipeline Integration** (`backend/app/workers/runner.py`):
+    - Advances `run.status = "CAPABILITY"` and commits prior to invoking `persist_capabilities`.
+    - Binds `run._capability_result`.
+    - Leaves `run.status = "CAPABILITY"` and `job.status = "PROCESSING"` (`completed_at = None`) in an honest non-terminal state awaiting Step 6H (Stage 8: Completion).
+  - **Test Suite** (`backend/tests/test_capability.py`):
+    - 66 hermetic unit and integration tests covering: persisted fine-grained evidence strength preservation, zero-strength preservation, type-strength fallback if strength is None, temporal decay half-life, diminishing returns math, score bounds `[0.01, 0.99]`, confidence bounds `[0.05, 0.98]`, negative polarity suppression without score zeroing (ADR-010), exclusive arc constraint validation, run-scoped idempotency, transactional rollback, and worker lifecycle transitions.
+- **Documented Architecture Limitations**:
+  - Verification: Executed against hermetic unit mocks (`AsyncMock`); live PostgreSQL / RLS integration verification remains pending.
+  - Aggregation Scope: Capability scoring is run-scoped (`where(Observation.analysis_run_id == run.id)`), evaluating single repositories in isolation rather than synthesizing cumulative evidence across all developer repositories.
+  - Temporal Reference: Recency decay references the analysis run execution time `now`; historical git commit timestamp propagation is deferred to future mining enhancements.
+- **Unimplemented in Step 6G**:
   - Stage 8: Pipeline Completion (`analysis_runs` -> `COMPLETED`, `analysis_jobs` -> `COMPLETED`).
 - **Next Milestone**:
-  - **Step 6F — Evidence Generation & Observation Contextualization**: Mapping factual observations and risk findings to contextualized evidence with type, strength, and polarity.
+  - **Step 6H — Analysis Pipeline Completion (Stage 8)**: Finalizing worker job runs, setting terminal status `COMPLETED`, setting timestamps, and error recovery handling.

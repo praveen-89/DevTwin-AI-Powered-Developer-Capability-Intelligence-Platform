@@ -39,6 +39,8 @@ from app.workers.fetcher import (
 from app.mining import mine_repository
 from app.skillgraph import persist_skillgraph
 from app.coderisk import persist_coderisk
+from app.evidence import persist_evidence
+from app.capability import persist_capabilities
 
 logger = logging.getLogger(__name__)
 
@@ -279,15 +281,51 @@ async def execute_job_run(
                 coderisk_result.findings_by_severity,
             )
 
-        # Stage 5 (CodeRisk) is completed for this execution attempt.
+            # Stage 6: Evidence Generation begins
+            evidence_result = await persist_evidence(
+                session=session,
+                run=run,
+            )
+            run._evidence_result = evidence_result
+            logger.info(
+                "Successfully generated and persisted Evidence for job %s run %s: %d evidence items (%s).",
+                job.id,
+                run.id,
+                evidence_result.total_evidence,
+                evidence_result.evidence_by_polarity,
+            )
+
+            # Stage 7: Capability Scoring begins
+            run.status = "CAPABILITY"
+            await session.commit()
+            await session.refresh(run)
+
+            cap_result = await persist_capabilities(
+                session=session,
+                run=run,
+            )
+            run._capability_result = cap_result
+            logger.info(
+                "Successfully scored and persisted Capabilities for job %s run %s: "
+                "%d targets (%d skills, %d technologies, %d concepts), avg_confidence=%.3f.",
+                job.id,
+                run.id,
+                cap_result.total_targets,
+                cap_result.targets_by_type.get("skill", 0),
+                cap_result.targets_by_type.get("technology", 0),
+                cap_result.targets_by_type.get("concept", 0),
+                cap_result.avg_confidence,
+            )
+
+        # Stage 7 (Capability Scoring) is completed for this execution attempt.
         # Per docs/13_ANALYSIS_PIPELINE.md, COMPLETED is strictly reserved for Stage 8 (pipeline completion).
-        # In Step 6E, subsequent stages (Stage 6 Evidence -> Stage 8 Completion) are deferred to Step 6F+.
-        # We do NOT falsely mark the job or run as COMPLETED because evidence and capability analysis have not run.
-        # The run remains in status 'CODE_RISK' and the job in 'PROCESSING' (both completed_at = None)
-        # awaiting Stage 6 handoff in Step 6F.
+        # Stage 8 (completion, dashboard aggregation) is deferred to Step 6H.
+        # We do NOT falsely mark the job or run as COMPLETED because Stage 8 has not run.
+        # The run remains in status 'CAPABILITY' and the job in 'PROCESSING' (both completed_at = None)
+        # awaiting Stage 8 handoff.
         await session.commit()
         logger.info(
-            "Stage 5 (CodeRisk) succeeded for job %s run %s. Awaiting Stage 6 (Evidence).",
+            "Stage 7 (Capability Scoring) succeeded for job %s run %s. Awaiting Stage 8 (Completion).",
             job.id,
             run.id,
         )

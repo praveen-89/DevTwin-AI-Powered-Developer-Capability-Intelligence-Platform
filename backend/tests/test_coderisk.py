@@ -98,12 +98,15 @@ def test_sec_001_placeholder_ignored(tmp_path):
 
 
 def test_sec_002_arbitrary_code_execution_detected(tmp_path):
-    """SEC-002 flags eval, exec, and os.system constructs."""
+    """SEC-002 flags eval, exec, os.system, and subprocess(..., shell=True) constructs."""
     code = (
         "import os\n"
+        "import subprocess\n"
         "eval('2 + 2')\n"
         "exec('print(1)')\n"
         "os.system('ls -la')\n"
+        "subprocess.run('rm -rf /', shell=True)\n"
+        "subprocess.Popen(['echo', 'hello'], shell=True)\n"
     )
     (tmp_path / "dangerous.py").write_text(code, encoding="utf-8")
 
@@ -111,11 +114,30 @@ def test_sec_002_arbitrary_code_execution_detected(tmp_path):
     findings = analyze_repository_risks(root_dir=tmp_path, mining_result=mining_res)
 
     sec2_findings = [f for f in findings if f.rule_id == "SEC-002"]
-    assert len(sec2_findings) == 3
+    assert len(sec2_findings) == 5
     lines = [f.line_start for f in sec2_findings]
-    assert 2 in lines
     assert 3 in lines
     assert 4 in lines
+    assert 5 in lines
+    assert 6 in lines
+    assert 7 in lines
+
+
+def test_sec_002_safe_subprocess_not_flagged(tmp_path):
+    """SEC-002 does NOT flag subprocess calls without shell=True or with shell=False."""
+    code = (
+        "import subprocess\n"
+        "subprocess.run(['ls', '-la'])\n"
+        "subprocess.Popen(['echo', 'hello'], shell=False)\n"
+        "subprocess.check_output(['git', 'status'])\n"
+    )
+    (tmp_path / "safe_proc.py").write_text(code, encoding="utf-8")
+
+    mining_res = create_sample_mining_result(source_files_count=1)
+    findings = analyze_repository_risks(root_dir=tmp_path, mining_result=mining_res)
+
+    sec2_findings = [f for f in findings if f.rule_id == "SEC-002"]
+    assert len(sec2_findings) == 0
 
 
 def test_sec_003_insecure_deserialization_detected(tmp_path):
@@ -341,7 +363,82 @@ async def test_persist_coderisk_mocked_session(tmp_path):
     # Verified 1 observation + 1 risk_finding added
     assert mock_session.add.call_count == 2
     assert mock_session.flush.await_count == 1
-    assert mock_session.execute.await_count == 1  # delete previous findings
+    assert mock_session.execute.await_count == 2  # deletes: RiskFinding and Observation(RISK_OBSERVED) for this run
+
+
+@pytest.mark.asyncio
+async def test_persist_coderisk_repeated_execution_idempotency(tmp_path):
+    """Calling persist_coderisk repeatedly on the same run deletes prior run-level findings and observations."""
+    job_id = uuid.uuid4()
+    repo_id = uuid.uuid4()
+    run = AnalysisRun(
+        id=uuid.uuid4(),
+        analysis_job_id=job_id,
+        repository_id=repo_id,
+        status="CODE_RISK",
+        analyzer_version="0.1.0",
+        schema_version="1.0.0",
+    )
+
+    (tmp_path / "app.py").write_text("eval('1 + 1')\n", encoding="utf-8")
+    mining_res = create_sample_mining_result(source_files_count=1)
+
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+
+    # First execution
+    res1 = await persist_coderisk(
+        session=mock_session,
+        run=run,
+        repository_id=repo_id,
+        root_dir=tmp_path,
+        mining_result=mining_res,
+    )
+    assert res1.total_findings == 1
+    assert mock_session.execute.await_count == 2
+
+    # Second execution on same run (idempotency check)
+    res2 = await persist_coderisk(
+        session=mock_session,
+        run=run,
+        repository_id=repo_id,
+        root_dir=tmp_path,
+        mining_result=mining_res,
+    )
+    assert res2.total_findings == 1
+    # 2 more execute calls for the deletes
+    assert mock_session.execute.await_count == 4
+
+
+@pytest.mark.asyncio
+async def test_persist_coderisk_failure_rollback(tmp_path):
+    """Database exception during persist_coderisk raises and allows caller rollback."""
+    job_id = uuid.uuid4()
+    repo_id = uuid.uuid4()
+    run = AnalysisRun(
+        id=uuid.uuid4(),
+        analysis_job_id=job_id,
+        repository_id=repo_id,
+        status="CODE_RISK",
+        analyzer_version="0.1.0",
+        schema_version="1.0.0",
+    )
+
+    (tmp_path / "app.py").write_text("eval('1 + 1')\n", encoding="utf-8")
+    mining_res = create_sample_mining_result(source_files_count=1)
+
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.flush.side_effect = RuntimeError("DB write error")
+
+    with pytest.raises(RuntimeError, match="DB write error"):
+        await persist_coderisk(
+            session=mock_session,
+            run=run,
+            repository_id=repo_id,
+            root_dir=tmp_path,
+            mining_result=mining_res,
+        )
 
 
 # ===========================================================================
@@ -377,6 +474,9 @@ async def test_execute_job_run_transitions_to_code_risk(tmp_path):
     with patch(
         "app.workers.runner.fetch_repository_for_job",
         new=AsyncMock(return_value=mock_fetch_result),
+    ), patch(
+        "app.workers.runner.persist_capabilities",
+        new=AsyncMock(return_value=__import__('app.capability.models', fromlist=['CapabilityResult']).CapabilityResult(total_targets=0)),
     ):
         with patch("app.workers.runner.temporary_workspace") as mock_ws:
             import contextlib
@@ -388,10 +488,9 @@ async def test_execute_job_run_transitions_to_code_risk(tmp_path):
             mock_ws.side_effect = dummy_ws
             run = await execute_job_run(job, mock_session)
 
-    # In Step 6E:
-    # run.status reaches CODE_RISK, run.completed_at is None
+    # Step 6G: run.status reaches CAPABILITY, run.completed_at is None
     # job.status remains PROCESSING, job.completed_at is None
-    assert run.status == "CODE_RISK"
+    assert run.status == "CAPABILITY"
     assert run.completed_at is None
     assert job.status == "PROCESSING"
     assert job.completed_at is None
@@ -402,6 +501,10 @@ async def test_execute_job_run_transitions_to_code_risk(tmp_path):
     assert run._skillgraph_result is not None
     assert hasattr(run, "_coderisk_result")
     assert run._coderisk_result is not None
+    assert hasattr(run, "_evidence_result")
+    assert run._evidence_result is not None
+    assert hasattr(run, "_capability_result")
+    assert run._capability_result is not None
 
 
 @pytest.mark.asyncio

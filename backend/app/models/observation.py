@@ -5,7 +5,7 @@ Maps to the `observations` table in Migration 001 (001_initial_schema.sql).
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import UUID, DateTime, ForeignKey, Numeric, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -16,6 +16,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.analysis_run import AnalysisRun
+    from app.models.evidence import Evidence
 
 
 class Observation(Base):
@@ -61,6 +62,11 @@ class Observation(Base):
     analysis_run: Mapped["AnalysisRun"] = relationship(
         "AnalysisRun",
         back_populates="observations",
+    )
+    evidence: Mapped[List["Evidence"]] = relationship(
+        "Evidence",
+        back_populates="observation",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

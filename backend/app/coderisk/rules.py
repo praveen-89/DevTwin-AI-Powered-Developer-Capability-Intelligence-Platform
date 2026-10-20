@@ -37,7 +37,7 @@ RULES: Dict[str, RuleDefinition] = {
         category="SECURITY",
         severity="HIGH",
         confidence=0.95,
-        description="Usage of dynamic evaluation or system execution constructs (eval, exec, os.system) detected.",
+        description="Usage of dynamic evaluation or system execution constructs (eval, exec, os.system, subprocess with shell=True) detected.",
     ),
     "SEC-003": RuleDefinition(
         rule_id="SEC-003",

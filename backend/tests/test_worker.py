@@ -488,16 +488,18 @@ def test_sanitize_failure_mapping():
 # Execution Lifecycle & End-to-End Worker Tests
 # ===========================================================================
 
-
 @pytest.mark.asyncio
 async def test_execute_job_run_success():
-    """execute_job_run transitions run to MINING and keeps job in PROCESSING awaiting Stage 4 on successful fetch & mine."""
+    """execute_job_run transitions run through all pipeline stages to CAPABILITY and keeps job in PROCESSING awaiting Stage 8."""
     job_id = uuid.uuid4()
     repo_id = uuid.uuid4()
     job = AnalysisJob(id=job_id, repository_id=repo_id, status="PROCESSING", attempt_count=1)
 
     mock_session = AsyncMock()
     mock_session.add = MagicMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value = []
+    mock_session.execute = AsyncMock(return_value=mock_result)
 
     mock_fetch_result = FetchResult(
         workspace_dir=Path("/tmp/ws"),
@@ -517,24 +519,32 @@ async def test_execute_job_run_success():
         completed_at=datetime.now(timezone.utc).isoformat(),
     )
 
+    from app.capability.models import CapabilityResult
+    mock_cap_result = CapabilityResult(total_targets=0)
+
     with patch(
         "app.workers.runner.fetch_repository_for_job",
         new=AsyncMock(return_value=mock_fetch_result),
     ), patch(
         "app.workers.runner.mine_repository",
         return_value=mock_mining_result,
+    ), patch(
+        "app.workers.runner.persist_capabilities",
+        new=AsyncMock(return_value=mock_cap_result),
     ):
         run = await execute_job_run(job, mock_session)
 
     # Per docs/13_ANALYSIS_PIPELINE.md, COMPLETED is reserved for Stage 8.
-    # In Step 6E, run advances to CODE_RISK and job remains PROCESSING (completed_at is None) awaiting Stage 6.
-    assert run.status == "CODE_RISK"
+    # Step 6G: run advances through Stage 7 (Capability) and job remains PROCESSING (completed_at is None) awaiting Stage 8.
+    assert run.status == "CAPABILITY"
     assert run.completed_at is None
     assert job.status == "PROCESSING"
     assert job.completed_at is None
     assert getattr(run, "_mining_result", None) is not None
     assert getattr(run, "_skillgraph_result", None) is not None
     assert getattr(run, "_coderisk_result", None) is not None
+    assert getattr(run, "_evidence_result", None) is not None
+    assert getattr(run, "_capability_result", None) is not None
     assert mock_session.commit.await_count >= 2
 
 

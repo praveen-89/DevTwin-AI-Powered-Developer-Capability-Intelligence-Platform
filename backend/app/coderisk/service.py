@@ -39,9 +39,16 @@ async def persist_coderisk(
 
     findings = analyze_repository_risks(root_dir=root_dir, mining_result=mining_result)
 
-    # 1. Snapshot replacement for repository-level risk findings
+    # 1. Idempotent cleanup for this analysis run
+    # Remove existing risk findings and parent RISK_OBSERVED observations for this run
     await session.execute(
-        delete(RiskFinding).where(RiskFinding.repository_id == repository_id)
+        delete(RiskFinding).where(RiskFinding.analysis_run_id == run.id)
+    )
+    await session.execute(
+        delete(Observation).where(
+            Observation.analysis_run_id == run.id,
+            Observation.type == "RISK_OBSERVED",
+        )
     )
 
     # 2. Persist Observations and RiskFinding records

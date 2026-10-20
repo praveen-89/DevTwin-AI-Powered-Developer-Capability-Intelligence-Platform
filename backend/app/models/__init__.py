@@ -21,6 +21,17 @@ from app.models.taxonomy import (
     SkillRelationship,
 )
 from app.models.risk_finding import RiskFinding
+from app.models.evidence import (
+    Evidence,
+    EvidenceSkill,
+    EvidenceTechnology,
+    EvidenceConcept,
+)
+from app.models.capability import (
+    DeveloperCapability,
+    CapabilityHistory,
+    SkillGap,
+)
 
 __all__ = [
     "Developer",
@@ -41,5 +52,12 @@ __all__ = [
     "TechnologyConcept",
     "SkillRelationship",
     "RiskFinding",
+    "Evidence",
+    "EvidenceSkill",
+    "EvidenceTechnology",
+    "EvidenceConcept",
+    "DeveloperCapability",
+    "CapabilityHistory",
+    "SkillGap",
     "Base",
 ]

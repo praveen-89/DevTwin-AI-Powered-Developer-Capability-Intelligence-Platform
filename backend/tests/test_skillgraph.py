@@ -514,6 +514,9 @@ async def test_execute_job_run_transitions_to_skill_graph(tmp_path):
     with patch(
         "app.workers.runner.fetch_repository_for_job",
         new=AsyncMock(return_value=mock_fetch_result),
+    ), patch(
+        "app.workers.runner.persist_capabilities",
+        new=AsyncMock(return_value=__import__('app.capability.models', fromlist=['CapabilityResult']).CapabilityResult(total_targets=0)),
     ):
         with patch("app.workers.runner.temporary_workspace") as mock_ws:
             import contextlib
@@ -525,10 +528,10 @@ async def test_execute_job_run_transitions_to_skill_graph(tmp_path):
             mock_ws.side_effect = dummy_ws
             run = await execute_job_run(job, mock_session)
 
-    # In Step 6E:
-    # run.status reaches CODE_RISK, run.completed_at is None
+    # In Step 6G:
+    # run.status reaches CAPABILITY, run.completed_at is None
     # job.status remains PROCESSING, job.completed_at is None
-    assert run.status == "CODE_RISK"
+    assert run.status == "CAPABILITY"
     assert run.completed_at is None
     assert job.status == "PROCESSING"
     assert job.completed_at is None
@@ -540,6 +543,8 @@ async def test_execute_job_run_transitions_to_skill_graph(tmp_path):
     assert run._skillgraph_result.observations_count >= 1
     assert hasattr(run, "_coderisk_result")
     assert run._coderisk_result is not None
+    assert hasattr(run, "_capability_result")
+    assert run._capability_result is not None
 
 
 @pytest.mark.asyncio
