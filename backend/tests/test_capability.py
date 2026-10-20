@@ -990,8 +990,13 @@ class TestWorkerStage7Lifecycle:
         assert "CAPABILITY" in statuses_seen
 
     @pytest.mark.asyncio
-    async def test_run_not_marked_completed_after_stage_7(self):
-        """After Stage 7 succeeds, the run must NOT be COMPLETED (Stage 8 deferred)."""
+    async def test_run_marked_completed_after_stage_8(self):
+        """After Stage 8 (Pipeline Completion) succeeds, both run and job must be COMPLETED.
+
+        This test replaces the pre-Step-6H 'deferred completion' assertion.
+        Stage 8 now advances both objects to COMPLETED immediately upon successful
+        capability scoring.
+        """
         from app.workers.runner import execute_job_run
         from app.models.analysis_job import AnalysisJob
 
@@ -1062,10 +1067,11 @@ class TestWorkerStage7Lifecycle:
 
                 run = await execute_job_run(job=job, session=session)
 
-        # The job must remain PROCESSING (not COMPLETED)
-        assert job.status != "COMPLETED"
-        # The run must not have completed_at set (confirmed by the mock not being mutated)
-        assert mock_run.completed_at is None
+        # Stage 8: both run and job must be COMPLETED after a successful pipeline execution.
+        assert job.status == "COMPLETED", f"Expected job.status='COMPLETED', got '{job.status}'"
+        assert job.completed_at is not None, "job.completed_at must be populated by Stage 8"
+        assert mock_run.status == "COMPLETED", f"Expected run.status='COMPLETED', got '{mock_run.status}'"
+        assert mock_run.completed_at is not None, "run.completed_at must be populated by Stage 8"
 
     @pytest.mark.asyncio
     async def test_capability_failure_marks_run_failed_not_completed(self):

@@ -507,11 +507,11 @@ async def test_execute_job_run_transitions_to_mining_and_preserves_processing_st
             mock_ws.side_effect = dummy_ws
             run = await execute_job_run(job, mock_session)
 
-    # Step 6G: run reaches CAPABILITY, job is PROCESSING, both completed_at are None
-    assert run.status == "CAPABILITY"
-    assert run.completed_at is None
-    assert job.status == "PROCESSING"
-    assert job.completed_at is None
+    # Step 6H: run reaches COMPLETED, job reaches COMPLETED, completed_at populated
+    assert run.status == "COMPLETED"
+    assert run.completed_at is not None
+    assert job.status == "COMPLETED"
+    assert job.completed_at is not None
     assert hasattr(run, "_mining_result")
     assert run._mining_result is not None
     assert run._mining_result.inventory.total_files == 1

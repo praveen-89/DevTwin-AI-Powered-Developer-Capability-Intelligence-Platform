@@ -549,11 +549,11 @@ async def test_execute_job_run_executes_stage_6_evidence(tmp_path):
             mock_ws.side_effect = dummy_ws
             run = await execute_job_run(job, mock_session)
 
-    # Step 6G: run.status reaches CAPABILITY (Stage 7 complete), awaiting Stage 8
-    assert run.status == "CAPABILITY"
-    assert run.completed_at is None
-    assert job.status == "PROCESSING"
-    assert job.completed_at is None
+    # Step 6H (Stage 8): Pipeline Completion now sets both run and job to COMPLETED.
+    assert run.status == "COMPLETED"
+    assert run.completed_at is not None
+    assert job.status == "COMPLETED"
+    assert job.completed_at is not None
 
     # Transient results bound
     assert hasattr(run, "_mining_result")

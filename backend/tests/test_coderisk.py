@@ -488,12 +488,11 @@ async def test_execute_job_run_transitions_to_code_risk(tmp_path):
             mock_ws.side_effect = dummy_ws
             run = await execute_job_run(job, mock_session)
 
-    # Step 6G: run.status reaches CAPABILITY, run.completed_at is None
-    # job.status remains PROCESSING, job.completed_at is None
-    assert run.status == "CAPABILITY"
-    assert run.completed_at is None
-    assert job.status == "PROCESSING"
-    assert job.completed_at is None
+    # Step 6H (Stage 8): Pipeline Completion now sets both run and job to COMPLETED.
+    assert run.status == "COMPLETED"
+    assert run.completed_at is not None
+    assert job.status == "COMPLETED"
+    assert job.completed_at is not None
 
     assert hasattr(run, "_mining_result")
     assert run._mining_result is not None

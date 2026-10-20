@@ -534,12 +534,12 @@ async def test_execute_job_run_success():
     ):
         run = await execute_job_run(job, mock_session)
 
-    # Per docs/13_ANALYSIS_PIPELINE.md, COMPLETED is reserved for Stage 8.
-    # Step 6G: run advances through Stage 7 (Capability) and job remains PROCESSING (completed_at is None) awaiting Stage 8.
-    assert run.status == "CAPABILITY"
-    assert run.completed_at is None
-    assert job.status == "PROCESSING"
-    assert job.completed_at is None
+    # Step 6H: Pipeline reaches Stage 8 Completion: both run and job are COMPLETED with completed_at populated.
+    assert run.status == "COMPLETED"
+    assert run.completed_at is not None
+    assert job.status == "COMPLETED"
+    assert job.completed_at is not None
+    assert run.completed_at == job.completed_at
     assert getattr(run, "_mining_result", None) is not None
     assert getattr(run, "_skillgraph_result", None) is not None
     assert getattr(run, "_coderisk_result", None) is not None
@@ -577,6 +577,35 @@ async def test_repeated_worker_invocation_does_not_reclaim_processing_job():
     assert processing_job.status == "PROCESSING"
     assert processing_job.attempt_count == 1
 
+
+
+@pytest.mark.asyncio
+async def test_execute_job_run_raises_on_already_completed_job():
+    """execute_job_run must raise ValueError and refuse execution when job is already COMPLETED."""
+    job_id = uuid.uuid4()
+    repo_id = uuid.uuid4()
+    completed_time = datetime.now(timezone.utc)
+    job = AnalysisJob(
+        id=job_id,
+        repository_id=repo_id,
+        status="COMPLETED",
+        attempt_count=1,
+        completed_at=completed_time,
+    )
+
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+
+    with pytest.raises(ValueError, match="Cannot execute run for already completed job"):
+        await execute_job_run(job, mock_session)
+
+    # Invariants: job terminal state must remain unchanged and unmutated
+    assert job.status == "COMPLETED"
+    assert job.completed_at == completed_time
+    assert job.attempt_count == 1
+    # Database session must not have been touched to add a run or commit
+    mock_session.add.assert_not_called()
+    mock_session.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -175,9 +175,13 @@ async def execute_job_run(
     jwt_generator: Optional[Callable[[], str]] = None,
 ) -> AnalysisRun:
     """
-    Executes an attempt for an analysis job through Stage 2 (Fetching).
+    Executes an attempt for an analysis job through Stage 8 (Pipeline Completion).
     Maintains database state consistency for AnalysisJob and AnalysisRun.
     """
+    if job.status == "COMPLETED":
+        logger.warning("Job %s is already in terminal COMPLETED state. Refusing to re-execute.", job.id)
+        raise ValueError(f"Cannot execute run for already completed job {job.id}")
+
     settings = get_settings()
     now = datetime.now(timezone.utc)
 
@@ -317,17 +321,25 @@ async def execute_job_run(
                 cap_result.avg_confidence,
             )
 
-        # Stage 7 (Capability Scoring) is completed for this execution attempt.
-        # Per docs/13_ANALYSIS_PIPELINE.md, COMPLETED is strictly reserved for Stage 8 (pipeline completion).
-        # Stage 8 (completion, dashboard aggregation) is deferred to Step 6H.
-        # We do NOT falsely mark the job or run as COMPLETED because Stage 8 has not run.
-        # The run remains in status 'CAPABILITY' and the job in 'PROCESSING' (both completed_at = None)
-        # awaiting Stage 8 handoff.
+        # Stage 8: Pipeline Completion
+        completion_time = datetime.now(timezone.utc)
+        run.status = "COMPLETED"
+        run.completed_at = completion_time
+
+        job.status = "COMPLETED"
+        job.completed_at = completion_time
+
+        session.add(run)
+        session.add(job)
         await session.commit()
+        await session.refresh(run)
+        await session.refresh(job)
+
         logger.info(
-            "Stage 7 (Capability Scoring) succeeded for job %s run %s. Awaiting Stage 8 (Completion).",
+            "Stage 8 (Pipeline Completion) succeeded for job %s run %s at %s. Pipeline fully COMPLETED.",
             job.id,
             run.id,
+            completion_time.isoformat(),
         )
 
     except Exception as exc:

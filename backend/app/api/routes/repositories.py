@@ -9,16 +9,41 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from app.api.dependencies.auth import get_current_developer
 from app.db.connection import get_db_session
+from app.models.analysis_run import AnalysisRun
 from app.models.developer import Developer
-from app.models.project import Project
+from app.models.evidence import Evidence
 from app.models.github_account import GitHubAccount
+from app.models.observation import Observation
+from app.models.project import Project
 from app.models.repository import Repository
+from app.models.repository_dependency import RepositoryDependency
+from app.models.repository_language import RepositoryLanguage
+from app.models.risk_finding import RiskFinding
+from app.models.taxonomy import (
+    Concept,
+    Skill,
+    SkillConcept,
+    SkillRelationship,
+    SkillTechnology,
+    Technology,
+    TechnologyConcept,
+)
+from app.schemas.coderisk import RiskFindingListResponse, RiskFindingResponse
+from app.schemas.skillgraph import (
+    SkillGraphDependencyResponse,
+    SkillGraphEdgeResponse,
+    SkillGraphLanguageResponse,
+    SkillGraphNodeResponse,
+    SkillGraphResponse,
+)
 from app.services.github.client import GitHubClient
 from app.services.github.auth import generate_app_jwt
 from app.services.github.exceptions import GitHubHTTPError, GitHubResponseError, GitHubIntegrationError
@@ -277,3 +302,296 @@ async def get_repository(
         )
 
     return repository
+
+
+async def _verify_repository_ownership(
+    session: AsyncSession,
+    repository_id: uuid.UUID,
+    developer_id: uuid.UUID,
+) -> Repository:
+    """Verifies that the repository belongs to an owned project of the developer."""
+    query = (
+        select(Repository)
+        .join(Project, Repository.project_id == Project.id)
+        .where(
+            Repository.id == repository_id,
+            Project.developer_id == developer_id,
+        )
+    )
+    result = await session.execute(query)
+    repo = result.scalar_one_or_none()
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found or not owned by developer.",
+        )
+    return repo
+
+
+@router.get("/{id}/risks", response_model=RiskFindingListResponse)
+async def get_repository_risks(
+    id: uuid.UUID,
+    run_id: Optional[uuid.UUID] = Query(None, description="Specific analysis run ID; defaults to latest completed run"),
+    severity: Optional[str] = Query(None, pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$", description="Filter by risk severity"),
+    category: Optional[str] = Query(None, description="Filter by category (SECURITY, RELIABILITY, etc.)"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    developer: Developer = Depends(get_current_developer),
+    session: AsyncSession = Depends(get_db_session),
+) -> RiskFindingListResponse:
+    """
+    Retrieve static CodeRisk findings for a repository.
+    Defaults to the latest completed analysis run unless a specific run_id is requested.
+    """
+    await _verify_repository_ownership(session, id, developer.id)
+
+    target_run_id = run_id
+    if target_run_id is None:
+        latest_run_stmt = (
+            select(AnalysisRun.id)
+            .where(AnalysisRun.repository_id == id, AnalysisRun.status == "COMPLETED")
+            .order_by(AnalysisRun.completed_at.desc(), AnalysisRun.created_at.desc())
+            .limit(1)
+        )
+        run_res = await session.execute(latest_run_stmt)
+        target_run_id = run_res.scalar_one_or_none()
+
+    if target_run_id is None:
+        return RiskFindingListResponse(
+            items=[],
+            total=0,
+            limit=limit,
+            offset=offset,
+            analysis_run_id=None,
+        )
+
+    base_where = [
+        RiskFinding.repository_id == id,
+        RiskFinding.analysis_run_id == target_run_id,
+    ]
+    if severity is not None:
+        base_where.append(RiskFinding.severity == severity)
+    if category is not None:
+        base_where.append(RiskFinding.category == category)
+
+    count_stmt = select(func.count(RiskFinding.id)).where(*base_where)
+    count_res = await session.execute(count_stmt)
+    total = count_res.scalar_one()
+
+    stmt = (
+        select(RiskFinding)
+        .where(*base_where)
+        .order_by(RiskFinding.detected_at.desc(), RiskFinding.id.asc())
+        .limit(limit)
+        .offset(offset)
+    )
+    res = await session.execute(stmt)
+    findings = res.scalars().all()
+
+    items = [
+        RiskFindingResponse(
+            id=f.id,
+            repository_id=f.repository_id,
+            analysis_run_id=f.analysis_run_id,
+            category=f.category,
+            severity=f.severity,
+            confidence=float(f.confidence),
+            risk_type=f.risk_type,
+            file_path=f.file_path,
+            line_start=f.line_start,
+            line_end=f.line_end,
+            detected_at=f.detected_at,
+        )
+        for f in findings
+    ]
+
+    return RiskFindingListResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        analysis_run_id=target_run_id,
+    )
+
+
+@router.get("/{id}/skillgraph", response_model=SkillGraphResponse)
+async def get_repository_skillgraph(
+    id: uuid.UUID,
+    run_id: Optional[uuid.UUID] = Query(None, description="Specific analysis run ID; defaults to latest completed run"),
+    developer: Developer = Depends(get_current_developer),
+    session: AsyncSession = Depends(get_db_session),
+) -> SkillGraphResponse:
+    """
+    Retrieve repository SkillGraph view including languages, dependencies, taxonomy nodes, and relationships.
+    """
+    await _verify_repository_ownership(session, id, developer.id)
+
+    target_run_id = run_id
+    if target_run_id is None:
+        latest_run_stmt = (
+            select(AnalysisRun.id)
+            .where(AnalysisRun.repository_id == id, AnalysisRun.status == "COMPLETED")
+            .order_by(AnalysisRun.completed_at.desc(), AnalysisRun.created_at.desc())
+            .limit(1)
+        )
+        run_res = await session.execute(latest_run_stmt)
+        target_run_id = run_res.scalar_one_or_none()
+
+    # 1. Repository languages
+    lang_stmt = (
+        select(RepositoryLanguage)
+        .where(RepositoryLanguage.repository_id == id)
+        .order_by(RepositoryLanguage.bytes.desc())
+    )
+    lang_res = await session.execute(lang_stmt)
+    languages = [
+        SkillGraphLanguageResponse(language=l.language, bytes=l.bytes)
+        for l in lang_res.scalars().all()
+    ]
+
+    # 2. Repository dependencies
+    dep_stmt = (
+        select(RepositoryDependency)
+        .where(RepositoryDependency.repository_id == id)
+        .order_by(RepositoryDependency.ecosystem.asc(), RepositoryDependency.package_name.asc())
+    )
+    dep_res = await session.execute(dep_stmt)
+    dependencies = [
+        SkillGraphDependencyResponse(
+            ecosystem=d.ecosystem,
+            package_name=d.package_name,
+            version_constraint=d.version_constraint,
+        )
+        for d in dep_res.scalars().all()
+    ]
+
+    nodes: List[SkillGraphNodeResponse] = []
+    edges: List[SkillGraphEdgeResponse] = []
+
+    if target_run_id is not None:
+        obs_subquery = (
+            select(Observation.id)
+            .where(Observation.analysis_run_id == target_run_id)
+        )
+        ev_stmt = (
+            select(Evidence)
+            .options(
+                selectinload(Evidence.skills),
+                selectinload(Evidence.technologies),
+                selectinload(Evidence.concepts),
+            )
+            .where(Evidence.observation_id.in_(obs_subquery))
+        )
+        ev_res = await session.execute(ev_stmt)
+        ev_rows = ev_res.scalars().unique().all()
+
+        seen_skills = {}
+        seen_techs = {}
+        seen_concepts = {}
+
+        for ev in ev_rows:
+            for s in ev.skills:
+                seen_skills[s.id] = s
+            for t in ev.technologies:
+                seen_techs[t.id] = t
+            for c in ev.concepts:
+                seen_concepts[c.id] = c
+
+        for s in seen_skills.values():
+            nodes.append(SkillGraphNodeResponse(id=s.id, name=s.name, type="skill", domain_or_category=s.domain))
+        for t in seen_techs.values():
+            nodes.append(SkillGraphNodeResponse(id=t.id, name=t.name, type="technology", domain_or_category=t.type))
+        for c in seen_concepts.values():
+            nodes.append(SkillGraphNodeResponse(id=c.id, name=c.name, type="concept", domain_or_category=None))
+
+        if seen_skills and seen_techs:
+            st_stmt = select(SkillTechnology).where(
+                SkillTechnology.skill_id.in_(list(seen_skills.keys())),
+                SkillTechnology.technology_id.in_(list(seen_techs.keys())),
+            )
+            st_res = await session.execute(st_stmt)
+            for st in st_res.scalars().all():
+                s = seen_skills.get(st.skill_id)
+                t = seen_techs.get(st.technology_id)
+                if s and t:
+                    edges.append(
+                        SkillGraphEdgeResponse(
+                            source_id=s.id,
+                            target_id=t.id,
+                            source_name=s.name,
+                            target_name=t.name,
+                            relation_type="USES",
+                        )
+                    )
+
+        if seen_skills and seen_concepts:
+            sc_stmt = select(SkillConcept).where(
+                SkillConcept.skill_id.in_(list(seen_skills.keys())),
+                SkillConcept.concept_id.in_(list(seen_concepts.keys())),
+            )
+            sc_res = await session.execute(sc_stmt)
+            for sc in sc_res.scalars().all():
+                s = seen_skills.get(sc.skill_id)
+                c = seen_concepts.get(sc.concept_id)
+                if s and c:
+                    edges.append(
+                        SkillGraphEdgeResponse(
+                            source_id=s.id,
+                            target_id=c.id,
+                            source_name=s.name,
+                            target_name=c.name,
+                            relation_type="APPLIES",
+                        )
+                    )
+
+        if seen_techs and seen_concepts:
+            tc_stmt = select(TechnologyConcept).where(
+                TechnologyConcept.technology_id.in_(list(seen_techs.keys())),
+                TechnologyConcept.concept_id.in_(list(seen_concepts.keys())),
+            )
+            tc_res = await session.execute(tc_stmt)
+            for tc in tc_res.scalars().all():
+                t = seen_techs.get(tc.technology_id)
+                c = seen_concepts.get(tc.concept_id)
+                if t and c:
+                    edges.append(
+                        SkillGraphEdgeResponse(
+                            source_id=t.id,
+                            target_id=c.id,
+                            source_name=t.name,
+                            target_name=c.name,
+                            relation_type="APPLIES",
+                        )
+                    )
+
+        if len(seen_skills) >= 2:
+            sr_stmt = select(SkillRelationship).where(
+                SkillRelationship.source_id.in_(list(seen_skills.keys())),
+                SkillRelationship.target_id.in_(list(seen_skills.keys())),
+            )
+            sr_res = await session.execute(sr_stmt)
+            for sr in sr_res.scalars().all():
+                s = seen_skills.get(sr.source_id)
+                t = seen_skills.get(sr.target_id)
+                if s and t:
+                    edges.append(
+                        SkillGraphEdgeResponse(
+                            source_id=s.id,
+                            target_id=t.id,
+                            source_name=s.name,
+                            target_name=t.name,
+                            relation_type=sr.relation_type,
+                        )
+                    )
+
+    nodes.sort(key=lambda n: (n.type, n.name))
+    edges.sort(key=lambda e: (e.source_name, e.target_name, e.relation_type))
+
+    return SkillGraphResponse(
+        repository_id=id,
+        analysis_run_id=target_run_id,
+        languages=languages,
+        dependencies=dependencies,
+        nodes=nodes,
+        edges=edges,
+    )

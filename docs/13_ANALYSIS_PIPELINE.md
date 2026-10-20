@@ -213,7 +213,26 @@ If any stage fails, the worker logs the exception to `analysis_runs.error_messag
   - Verification: Executed against hermetic unit mocks (`AsyncMock`); live PostgreSQL / RLS integration verification remains pending.
   - Aggregation Scope: Capability scoring is run-scoped (`where(Observation.analysis_run_id == run.id)`), evaluating single repositories in isolation rather than synthesizing cumulative evidence across all developer repositories.
   - Temporal Reference: Recency decay references the analysis run execution time `now`; historical git commit timestamp propagation is deferred to future mining enhancements.
-- **Unimplemented in Step 6G**:
-  - Stage 8: Pipeline Completion (`analysis_runs` -> `COMPLETED`, `analysis_jobs` -> `COMPLETED`).
-- **Next Milestone**:
-  - **Step 6H — Analysis Pipeline Completion (Stage 8)**: Finalizing worker job runs, setting terminal status `COMPLETED`, setting timestamps, and error recovery handling.
+### Step 6H: Analysis Pipeline Completion — Stage 8 (Completed)
+- **Completed Components**:
+  - **Stage 8 — Pipeline Completion** (`backend/app/workers/runner.py`):
+    - After `persist_capabilities` (Stage 7) returns successfully, the runner executes Stage 8 atomically:
+      - `run.status = "COMPLETED"` and `run.completed_at = now` (UTC).
+      - `job.status = "COMPLETED"` and `job.completed_at = now` (UTC) — the same timestamp as the run.
+      - `session.add(run)`, `session.add(job)`, `await session.commit()` — committed in a single transaction.
+    - Both the `COMPLETED` status for `analysis_runs` and `COMPLETED` status for `analysis_jobs` are valid per the database check constraints defined in `database/migrations/001_initial_schema.sql`.
+    - **Idempotency Guard**: `execute_job_run` raises `ValueError` immediately if `job.status == "COMPLETED"` is detected at entry, preventing re-execution of already-completed jobs.
+    - **Error path unchanged**: Any exception raised before Stage 8 (including within Stage 7) triggers `sanitize_failure()`, rolls back the session, and sets both `run.status = "FAILED"` and `job.status = "FAILED"` with sanitized error codes and timestamps.
+  - **Test Suite Updates** (`backend/tests/test_worker.py`, `backend/tests/test_mining.py`, `backend/tests/test_skillgraph.py`, `backend/tests/test_coderisk.py`, `backend/tests/test_evidence.py`, `backend/tests/test_capability.py`):
+    - All pipeline integration tests updated from pre-6H deferred `CAPABILITY`/`PROCESSING` assertions to the correct terminal `COMPLETED` state contract.
+    - `test_capability.py::TestWorkerStage7Lifecycle::test_run_marked_completed_after_stage_8`: Renamed from `test_run_not_marked_completed_after_stage_7`; now asserts both `job.status == "COMPLETED"`, `job.completed_at is not None`, `run.status == "COMPLETED"`, `run.completed_at is not None`.
+    - `test_coderisk.py::test_execute_job_run_transitions_to_code_risk`: Updated terminal state assertions.
+    - `test_evidence.py::test_execute_job_run_executes_stage_6_evidence`: Updated terminal state assertions.
+  - **Full Test Suite Result**: **349 passed, 0 failed, 15 pre-existing warnings** (same 15 `RuntimeWarning: coroutine ... was never awaited` in `test_github.py` from Step 6A).
+- **Pipeline State Flow (Fully Implemented)**:
+  ```
+  QUEUED → [Stage 2: FETCHING] → [Stage 3: MINING] → [Stage 4: SKILL_GRAPH]
+         → [Stage 5: CODE_RISK] → [Stage 6: Evidence] → [Stage 7: CAPABILITY]
+         → [Stage 8: COMPLETED] ✓
+  Any failure → FAILED (with sanitized error_code + error_message)
+  ```

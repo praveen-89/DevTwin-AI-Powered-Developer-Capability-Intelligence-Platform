@@ -13,19 +13,26 @@
 
 **`GET /developers/me`**
 *   **Purpose**: Retrieve developer identity for the authenticated user.
-*   **Response**: `{ "id": "uuid", "github_username": "string" }`
+*   **Response**: `200 OK`, `DeveloperResponse` (`id`, `auth_user_id`, `created_at`, `updated_at`). Returns `404 Not Found` if profile not yet created.
 
 **`POST /developers/me`**
-*   **Purpose**: Create a developer identity for the newly authenticated user.
-*   **Response**: `{ "id": "uuid", "auth_user_id": "uuid" }`
+*   **Purpose**: Create a developer identity for the newly authenticated user. Idempotent: returns existing record if already initialized.
+*   **Response**: `201 Created` or `200 OK`, `DeveloperResponse`.
 
-**`GET /developers/{id}/capabilities`**
-*   **Purpose**: Get the current capability state for the developer.
-*   **Response**: Array of `developer_capabilities` objects including target metadata (resolved Skill/Tech/Concept name), `score`, and `confidence`.
+**`GET /developers/me/capabilities`** and **`GET /developers/{id}/capabilities`**
+*   **Purpose**: Retrieve capability scores and confidence intervals for the developer. Enforces caller ownership (returns 404 on cross-developer access).
+*   **Query Parameters**: `target_type` (optional: `skill`, `technology`, `concept`), `min_confidence` (optional float), `limit` (default 50), `offset` (default 0).
+*   **Response**: `200 OK`, `DeveloperCapabilityListResponse` containing `items` with resolved `target` metadata (`target_type`, `target_id`, `target_name`, `domain_or_category`), `score` [0.0, 1.0], `confidence` [0.0, 1.0], `scoring_version`, `updated_at`.
 
-**`GET /developers/{id}/evidence`**
-*   **Purpose**: Retrieve the contextualized evidence supporting a developer's capabilities.
-*   **Response**: Array of `evidence` objects including `type`, `strength`, and `polarity`.
+**`GET /developers/me/capabilities/history`**
+*   **Purpose**: Retrieve append-only history of capability score snapshots for trend visualization.
+*   **Query Parameters**: `target_id`, `target_type`, `capability_id`, `analysis_run_id`, `limit`, `offset`.
+*   **Response**: `200 OK`, `CapabilityHistoryListResponse` sorted by `recorded_at DESC`.
+
+**`GET /developers/me/evidence`**
+*   **Purpose**: Retrieve contextualized evidence supporting capabilities, including safe source code provenance.
+*   **Query Parameters**: `repository_id`, `analysis_run_id`, `evidence_type`, `polarity` (`positive`/`negative`), `target_id`, `limit`, `offset`.
+*   **Response**: `200 OK`, `EvidenceListResponse` with `items` containing `type`, `strength`, `directness`, `reliability`, `polarity`, `recency`, linked `skills`, `technologies`, `concepts`, and safe `provenance` (file/line numbers without secret code).
 
 ### 2. GitHub Integration
 
@@ -70,8 +77,16 @@
 *   **Response**: `200 OK`, `RepositoryResponse` object. Returns 404 for nonexistent or unowned repositories.
 
 **`GET /repositories/{id}/risks`**
-*   **Purpose**: Get CodeRisk findings (Pending future milestone).
-*   **Response**: Array of `risk_findings` objects.
+*   **Purpose**: Retrieve static CodeRisk findings for a repository. Defaults to the latest completed analysis run unless `run_id` is specified.
+*   **Authentication**: Required (Current Developer; returns 404 if not owned).
+*   **Query Parameters**: `run_id` (optional), `severity` (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), `category`, `limit`, `offset`.
+*   **Response**: `200 OK`, `RiskFindingListResponse` containing `items` with `rule_type`, `category`, `severity`, `confidence`, `file_path`, `line_start`, `line_end`, and `analysis_run_id`.
+
+**`GET /repositories/{id}/skillgraph`**
+*   **Purpose**: Retrieve repository SkillGraph topology including mined languages, dependencies, resolved taxonomy nodes, and directed relationship edges. Defaults to latest completed run snapshot unless `run_id` is specified.
+*   **Authentication**: Required (Current Developer; returns 404 if not owned).
+*   **Query Parameters**: `run_id` (optional).
+*   **Response**: `200 OK`, `SkillGraphResponse` with `languages`, `dependencies`, `nodes` (skills, technologies, concepts), and `edges` (`USES`, `APPLIES`, `REQUIRES`, `RELATED_TO`).
 
 ### 4. Analysis Pipeline
 
