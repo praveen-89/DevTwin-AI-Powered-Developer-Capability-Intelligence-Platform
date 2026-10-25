@@ -68,15 +68,14 @@ def test_generate_app_jwt_success():
 
 def test_generate_app_jwt_fails_missing_key(monkeypatch):
     """Missing private key fails securely."""
-    monkeypatch.delenv("GITHUB_PRIVATE_KEY", raising=False)
+    monkeypatch.setenv("GITHUB_PRIVATE_KEY", "")
     
     from app.core.config import get_settings
     get_settings.cache_clear()
     
-    # Pydantic will raise a ValidationError before we even get to the function
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError):
+    with pytest.raises(GitHubConfigurationError):
         generate_app_jwt()
+
 
 
 def test_generate_app_jwt_fails_invalid_key(monkeypatch):

@@ -1396,3 +1396,344 @@ async def test_github_disconnect_db_error_returns_500(app):
     mock_session.rollback.assert_awaited_once()
 
     app.dependency_overrides.clear()
+
+
+# ===========================================================================
+# GET /github/repositories tests
+# ===========================================================================
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_unauthenticated(app):
+    """GET /github/repositories without auth returns 401."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/repositories")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_no_account(app):
+    """GET /github/repositories returns 400 if developer has no linked GitHubAccount."""
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/repositories")
+
+    assert response.status_code == 400
+    assert "No GitHub account linked." in response.json()["detail"]
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_disconnected_account(app):
+    """GET /github/repositories returns 400 if GitHubAccount is disconnected."""
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=datetime.now(timezone.utc),
+    )
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/repositories")
+
+    assert response.status_code == 400
+    assert "GitHub account is disconnected." in response.json()["detail"]
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_no_installation(app):
+    """GET /github/repositories returns 400 if GitHubAccount has no installation_id."""
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=None,
+        disconnected_at=None,
+    )
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/github/repositories")
+
+    assert response.status_code == 400
+    assert "No personal GitHub App installation found." in response.json()["detail"]
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_token_failure(app):
+    """GET /github/repositories returns 502 if installation token creation fails."""
+    from app.models.github_account import GitHubAccount
+    from app.services.github.exceptions import GitHubHTTPError
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    with patch("app.api.routes.github.generate_app_jwt", return_value="fake_app_jwt"), \
+         patch("app.api.routes.github.GitHubClient.create_installation_access_token",
+               side_effect=GitHubHTTPError("Token creation failed", status_code=500)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/repositories")
+
+    assert response.status_code == 502
+    assert "Failed to authenticate with GitHub." in response.json()["detail"]
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_success(app):
+    """GET /github/repositories returns normalized repository choices and avoids token leak."""
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    raw_repos = [
+        {
+            "id": 101,
+            "name": "repo-one",
+            "full_name": "devuser/repo-one",
+            "private": False,
+            "visibility": "public",
+            "default_branch": "main",
+        },
+        {
+            "id": 102,
+            "name": "repo-two",
+            "full_name": "devuser/repo-two",
+            "private": True,
+            "visibility": "private",
+            "default_branch": "develop",
+        },
+    ]
+
+    secret_inst_token = "ghs_SECRET_INSTALLATION_TOKEN_999"
+
+    with patch("app.api.routes.github.generate_app_jwt", return_value="fake_jwt"), \
+         patch("app.api.routes.github.GitHubClient.create_installation_access_token",
+               new=AsyncMock(return_value=secret_inst_token)) as mock_create_token, \
+         patch("app.api.routes.github.GitHubClient.list_installation_repositories",
+               new=AsyncMock(return_value=raw_repos)) as mock_list_repos:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/repositories")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0] == {
+        "github_repo_id": 101,
+        "name": "repo-one",
+        "full_name": "devuser/repo-one",
+        "visibility": "public",
+        "private": False,
+        "default_branch": "main",
+    }
+    assert data[1] == {
+        "github_repo_id": 102,
+        "name": "repo-two",
+        "full_name": "devuser/repo-two",
+        "visibility": "private",
+        "private": True,
+        "default_branch": "develop",
+    }
+    # Invariant: Secret token never exposed in response
+    assert secret_inst_token not in str(data)
+    mock_list_repos.assert_awaited_once_with(secret_inst_token)
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_empty(app):
+    """GET /github/repositories returns empty list when no repositories are accessible."""
+    from app.models.github_account import GitHubAccount
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    with patch("app.api.routes.github.generate_app_jwt", return_value="fake_jwt"), \
+         patch("app.api.routes.github.GitHubClient.create_installation_access_token",
+               new=AsyncMock(return_value="inst_token")), \
+         patch("app.api.routes.github.GitHubClient.list_installation_repositories",
+               new=AsyncMock(return_value=[])):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/repositories")
+
+    assert response.status_code == 200
+    assert response.json() == []
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_rate_limit(app):
+    """GET /github/repositories returns 429 when GitHub rate limit is exceeded."""
+    from app.models.github_account import GitHubAccount
+    from app.services.github.exceptions import GitHubRateLimitError
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    with patch("app.api.routes.github.generate_app_jwt", return_value="fake_jwt"), \
+         patch("app.api.routes.github.GitHubClient.create_installation_access_token",
+               new=AsyncMock(return_value="inst_token")), \
+         patch("app.api.routes.github.GitHubClient.list_installation_repositories",
+               side_effect=GitHubRateLimitError("Rate limit hit")):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/repositories")
+
+    assert response.status_code == 429
+    assert "rate limit exceeded" in response.json()["detail"].lower()
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_github_repositories_permission_forbidden(app):
+    """GET /github/repositories returns 403 when installation lacks permissions."""
+    from app.models.github_account import GitHubAccount
+    from app.services.github.exceptions import GitHubHTTPError
+
+    developer_id = uuid.uuid4()
+    mock_dev = Developer(id=developer_id, auth_user_id=uuid.uuid4())
+    app.dependency_overrides[get_current_developer] = lambda: mock_dev
+
+    mock_account = GitHubAccount(
+        developer_id=developer_id,
+        github_id=12345,
+        username="devuser",
+        installation_id=67890,
+        disconnected_at=None,
+    )
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_account
+    mock_session.execute.return_value = mock_result
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    with patch("app.api.routes.github.generate_app_jwt", return_value="fake_jwt"), \
+         patch("app.api.routes.github.GitHubClient.create_installation_access_token",
+               new=AsyncMock(return_value="inst_token")), \
+         patch("app.api.routes.github.GitHubClient.list_installation_repositories",
+               side_effect=GitHubHTTPError("Forbidden", status_code=403)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/repositories")
+
+    assert response.status_code == 403
+    assert "lacks access" in response.json()["detail"].lower()
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_client_list_installation_repositories_pagination():
+    """GitHubClient.list_installation_repositories correctly paginates until total_count reached."""
+    from app.services.github.client import GitHubClient
+
+    client = GitHubClient()
+
+    page1_payload = {
+        "total_count": 3,
+        "repositories": [{"id": 1, "name": "r1"}, {"id": 2, "name": "r2"}],
+    }
+    page2_payload = {
+        "total_count": 3,
+        "repositories": [{"id": 3, "name": "r3"}],
+    }
+
+    mock_resp1 = MagicMock()
+    mock_resp1.json.return_value = page1_payload
+    mock_resp2 = MagicMock()
+    mock_resp2.json.return_value = page2_payload
+
+    with patch.object(client, "_request", side_effect=[mock_resp1, mock_resp2]) as mock_req:
+        repos = await client.list_installation_repositories("test_token", per_page=2, max_pages=5)
+
+    assert len(repos) == 3
+    assert [r["id"] for r in repos] == [1, 2, 3]
+    assert mock_req.await_count == 2
+

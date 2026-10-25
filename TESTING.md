@@ -64,12 +64,24 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 *   **RLS Integration**: (Future hardening) Runtime database-level RLS integration test to authenticate as Developer A and attempt to query Developer B's data.
 
 ## Frontend Testing
-*   **Components**: Unit test UI components (e.g., the Capability Radar chart) with mock JSON props.
-*   **States**: Test loading skeletons, error boundaries, and empty state visuals.
+*   **Unit Tests (`vitest run`)**: 36 passed across 2 suites:
+    *   `skillgraph-canvas.test.ts`: 24 tests covering node/edge filtering, search, incident connectivity, and taxonomy colors.
+    *   `capability-history-chart.test.ts`: 12 tests covering chronological sorting, Recharts data mapping, and rounding.
+*   **Linting (`eslint`)**: 0 errors, 0 warnings across all TypeScript and Next.js components.
+*   **Production Build (`next build`)**: Exit code 0, 7 static routes compiled and prerendered.
 
-## End-to-End (E2E)
-Critical user flows must be tested via browser automation:
-`Signup/Login -> GitHub Connection -> Repository Selection -> Analysis Job Queued -> Dashboard Render -> Capability Drilldown -> Evidence Provenance Check`
+## End-to-End (E2E) Browser Testing (`npx playwright test`)
+*   **Status**: 21 passed, 26 skipped, 0 failed (47 total tests executed in headless Chromium).
+*   **Passed Suites (21 tests)**:
+    *   `auth.spec.ts` (6 unauthenticated/shell tests)
+    *   `repositories.spec.ts` (2 unauthenticated tests)
+    *   `analysis.spec.ts` (2 unauthenticated tests)
+    *   `skillgraph.spec.ts` (2 unauthenticated tests)
+    *   `capabilities.spec.ts` (2 unauthenticated tests)
+    *   `mocked-flows.spec.ts` (7 authenticated simulation tests: profile provisioning, navigation across all 6 routes, repository switching, Overview gauges, SkillGraph canvas interactions and table toggle, capability history selection, and 401 session expiry handling).
+*   **Skipped Suites (26 tests)**:
+    *   Live authenticated tests requiring `DEVTWIN_DEV_TOKEN` against a running backend (`auth.spec.ts`: 3, `repositories.spec.ts`: 3, `analysis.spec.ts`: 4, `capabilities.spec.ts`: 7, `skillgraph.spec.ts`: 9). Safely skipped to prevent false negatives when live credentials are absent.
+    *   Live analysis job execution guarded by `DEVTWIN_ALLOW_LIVE_ANALYSIS=true` to prevent destructive or expensive repository analysis runs.
 
 ## Regression Testing
 Every bug fix involving data extraction, capability scoring, or UI rendering must have a regression test added.

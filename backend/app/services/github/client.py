@@ -240,6 +240,43 @@ class GitHubClient:
 
         return token
 
+    async def list_installation_repositories(
+        self,
+        installation_token: str,
+        per_page: int = 100,
+        max_pages: int = 10,
+    ) -> List[dict]:
+        """
+        Lists repositories accessible to the GitHub App installation using an installation access token.
+        Paginates through results until all repositories are retrieved or max_pages is reached.
+        Never logs or persists the installation token.
+        """
+        all_repositories: List[dict] = []
+        page = 1
+
+        while page <= max_pages:
+            url = f"/installation/repositories?per_page={per_page}&page={page}"
+            try:
+                response = await self._request("GET", url, token=installation_token)
+                payload = response.json()
+            except ValueError as e:
+                raise GitHubResponseError("Invalid JSON response from GitHub installation repositories API.") from e
+
+            total_count = payload.get("total_count", 0)
+            repos_page = payload.get("repositories", [])
+            if not isinstance(repos_page, list):
+                raise GitHubResponseError("Invalid repositories format in GitHub response.")
+
+            all_repositories.extend(repos_page)
+
+            # Terminate if all repositories have been fetched, or current page is empty, or reached total_count
+            if not repos_page or len(repos_page) < per_page or (total_count > 0 and len(all_repositories) >= total_count):
+                break
+
+            page += 1
+
+        return all_repositories
+
     async def get_installation_repository(self, github_repo_id: int, installation_token: str) -> dict:
         """
         Fetches repository metadata by ID to verify it exists and is accessible

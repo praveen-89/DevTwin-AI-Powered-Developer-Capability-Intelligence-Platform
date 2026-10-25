@@ -37,7 +37,7 @@ Dashboard
 ```
 
 ## Components
-*   **Frontend**: Next.js providing the SSR and client-side Dashboard.
+*   **Frontend**: Next.js 16 (App Router, Turbopack, Tailwind CSS v4, TypeScript) serving the DevTwin Capability Dashboard. Communicates with backend via typed `ApiClient`, provides AuthProvider for session token propagation, and renders Overview, Repositories, Capabilities (with Recharts temporal history), CodeRisk, SkillGraph (with interactive Cytoscape canvas), and Evidence views.
 *   **Backend**: FastAPI serving REST endpoints for the frontend.
 *   **Database**: PostgreSQL (Supabase) storing normalized relational data, SkillGraph, and capabilities.
 *   **Queue**: Redis for managing `analysis_jobs`.

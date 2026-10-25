@@ -23,7 +23,13 @@ from app.services.github.state import (
     GitHubStateNotFoundError,
     GitHubStateExpiredError,
 )
-from app.services.github.exceptions import GitHubStatePersistenceError, GitHubHTTPError, GitHubResponseError
+from app.services.github.exceptions import (
+    GitHubStatePersistenceError,
+    GitHubHTTPError,
+    GitHubResponseError,
+    GitHubIntegrationError,
+    GitHubRateLimitError,
+)
 from app.services.github.client import GitHubClient
 from app.services.github.auth import generate_app_jwt
 
@@ -40,6 +46,15 @@ class GitHubStatusResponse(BaseModel):
     is_installed: bool
     is_disconnected: bool
     github_username: str | None
+
+
+class GitHubRepositoryResponse(BaseModel):
+    github_repo_id: int
+    name: str
+    full_name: str
+    visibility: str
+    private: bool
+    default_branch: str
 
 
 @router.get("/install")
@@ -426,3 +441,111 @@ async def disconnect_github(
             )
 
     return None
+
+
+@router.get("/repositories", response_model=list[GitHubRepositoryResponse])
+async def list_accessible_github_repositories(
+    developer: Developer = Depends(get_current_developer),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[GitHubRepositoryResponse]:
+    """
+    List repositories accessible to the developer's GitHub App installation.
+
+    Generates an ephemeral installation access token on demand.
+    Queries GitHub's /installation/repositories with automatic pagination.
+    Returns normalized repository choices for registration into DevTwin projects.
+    Never persists the installation token or exposes secrets.
+    """
+    gh_query = select(GitHubAccount).where(GitHubAccount.developer_id == developer.id)
+    gh_result = await session.execute(gh_query)
+    github_account = gh_result.scalar_one_or_none()
+
+    if not github_account:
+        logger.warning(f"Developer {developer.id} has no GitHubAccount.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No GitHub account linked."
+        )
+
+    if github_account.disconnected_at is not None:
+        logger.warning(f"Developer {developer.id} GitHubAccount is disconnected.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="GitHub account is disconnected."
+        )
+
+    if github_account.installation_id is None:
+        logger.warning(f"Developer {developer.id} has no personal installation.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No personal GitHub App installation found."
+        )
+
+    client = GitHubClient()
+    try:
+        app_jwt = generate_app_jwt()
+        installation_token = await client.create_installation_access_token(
+            github_account.installation_id, app_jwt
+        )
+    except GitHubIntegrationError as e:
+        logger.error(f"Failed to generate installation token: {e.__class__.__name__}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to authenticate with GitHub."
+        )
+
+    try:
+        repos_data = await client.list_installation_repositories(installation_token)
+    except GitHubRateLimitError:
+        logger.warning("GitHub rate limit exceeded listing repositories.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="GitHub API rate limit exceeded. Please try again later."
+        )
+    except GitHubHTTPError as e:
+        logger.warning(f"GitHub HTTP error listing installation repositories: HTTP {e.status_code}")
+        if e.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="GitHub installation authentication failed."
+            )
+        elif e.status_code in (403, 404):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="GitHub App installation lacks access to list repositories."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to fetch repositories from GitHub."
+        )
+    except GitHubIntegrationError as e:
+        logger.error(f"GitHub integration error listing repositories: {e.__class__.__name__}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to fetch repositories from GitHub."
+        )
+    finally:
+        del installation_token
+
+    results: list[GitHubRepositoryResponse] = []
+    for repo in repos_data:
+        repo_id = repo.get("id")
+        name = repo.get("name")
+        full_name = repo.get("full_name")
+        is_private = bool(repo.get("private", False))
+        visibility = repo.get("visibility") or ("private" if is_private else "public")
+        default_branch = repo.get("default_branch") or "main"
+
+        if repo_id and name and full_name:
+            results.append(
+                GitHubRepositoryResponse(
+                    github_repo_id=repo_id,
+                    name=name,
+                    full_name=full_name,
+                    visibility=visibility,
+                    private=is_private,
+                    default_branch=default_branch,
+                )
+            )
+
+    return results

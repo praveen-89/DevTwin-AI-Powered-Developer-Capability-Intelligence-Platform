@@ -138,3 +138,29 @@ Source of Truth: DECISIONS.md
 *   **Alternatives Considered**:
     - **2-step flow** (Option B): Redirect to `/login/oauth/authorize` with PKCE first, then redirect to `/installations/new` afterward. This supports PKCE properly but forces two separate GitHub consent screens, significantly degrading UX. Rejected for MVP scope.
 *   **Why This Decision**: DevTwin is a confidential client (server-side `client_secret` is never exposed). Per OAuth 2.1, PKCE is mandatory for public clients but defense-in-depth for confidential ones. The `state` parameter provides the same CSRF guarantee and developer-identity binding that PKCE would have added. Removing it eliminates dead code and eliminates false security confidence.
+
+## ADR-016: Next.js 16 App Router Frontend with Tailwind CSS v4 & Lucide Icons
+*   **Date**: 2026-10-20
+*   **Status**: ACTIVE
+*   **Title**: Next.js 16 + Tailwind CSS v4 Dark-First Design System
+*   **Context**: Building the Step 7A Frontend Foundation & Design System for DevTwin to surface Step 6J backend intelligence APIs.
+*   **Decisions**:
+    1. **Framework & Engine**: Next.js 16 with Turbopack, App Router, and TypeScript.
+    2. **Styling**: Tailwind CSS v4 with custom dark-first design tokens (`#090D16` slate base, `#06b6d4` cyan / `#10b981` emerald accents, `@theme` token definitions in `globals.css`).
+    3. **Iconography**: Lucide React (`lucide-react@1.60`). In this version, `Github` is not exported; `GitBranch` is standardized across repository and git identity displays.
+    4. **Authentication & Session State**: Client-side `AuthProvider` with `sessionStorage` developer bearer token storage (`devtwin_dev_token`) to allow standalone development against FastAPI without requiring a live Supabase Auth instance.
+    5. **Run-Scoped Capability Boundary**: Since the Minor MVP capability model is single-repository run-scoped, capabilities are displayed with an explicit amber disclaimer banner. No cross-repository aggregation is fabricated.
+    6. **Bounded Polling**: Analysis polling in the overview dashboard is bounded to 75 attempts (~5 minutes at 4-second intervals) with automatic cancellation on unmount and terminal status detection (`COMPLETED`, `FAILED`).
+*   **Why This Decision**: Provides a fast, typed, responsive dashboard with rigorous data provenance, zero fabricated metrics, and complete architectural consistency with the Step 6J backend.
+
+## ADR-017: Cytoscape & Recharts for Interactive Graph and Temporal Analytics
+*   **Date**: 2026-10-20
+*   **Status**: ACTIVE
+*   **Title**: Interactive SkillGraph Canvas (Cytoscape) and Capability History Time Series (Recharts)
+*   **Context**: Step 7C requires interactive exploration of repository SkillGraph taxonomy networks and chronological tracking of capability score snapshots without breaking React 19 compatibility.
+*   **Decisions**:
+    1. **Graph Engine**: Use `cytoscape` (v3.34) mounted via React ref inside a client component. Provides native canvas rendering, pan/zoom/fit, selection events, and layout engines (`cose` force-directed, `concentric`, `breadthfirst`, `circle`) with zero React 19 peer-dependency conflicts.
+    2. **Chart Engine**: Use `recharts` (v3.10) for temporal time-series line and area charts. Supports strict typed coordinates, responsive SVG containers, reference baselines, and customized dark-first tooltips.
+    3. **Run-Scoped Comparability Enforcement**: Capability history records are strictly partitioned by target identifier (`target_id`). Plotted time-series data points represent sequential discrete run snapshots, explicitly labeled with an amber comparability banner to prevent misleading cross-repository aggregation assumptions.
+    4. **Accessibility Fallback**: The SkillGraph view provides a view mode toggle offering an accessible tabular list view of nodes and relationships alongside the graphical canvas for keyboard and screen-reader accessibility.
+*   **Why This Decision**: Avoids building fragile custom force-directed canvas logic from scratch while guaranteeing 100% compatibility with React 19 and Next.js 16 Turbopack.
