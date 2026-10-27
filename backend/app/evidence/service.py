@@ -154,9 +154,14 @@ async def persist_evidence(
                 session.add(Concept(id=new_concept_id, name=c_name))
                 concept_ids[c_name] = new_concept_id
 
-    # 5. Persist Evidence and Junction Rows
+    # Flush newly added taxonomy entities
+    await session.flush()
+
+    # 5. Persist Evidence rows first
+    ev_map = []
     for item in items:
         ev_id = uuid.uuid4()
+        ev_map.append((item, ev_id))
         session.add(
             Evidence(
                 id=ev_id,
@@ -170,6 +175,11 @@ async def persist_evidence(
             )
         )
 
+    # Flush Evidence rows so their IDs exist in PostgreSQL before junction inserts
+    await session.flush()
+
+    # 6. Persist Junction Rows
+    for item, ev_id in ev_map:
         for s_name in item.skills:
             if s_name in skill_ids:
                 session.add(EvidenceSkill(evidence_id=ev_id, skill_id=skill_ids[s_name]))

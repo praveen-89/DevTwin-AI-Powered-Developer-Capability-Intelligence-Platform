@@ -88,7 +88,7 @@ class PythonASTParser(BaseASTParser):
 
         try:
             tree = ast.parse(source_text, filename=rel_path)
-        except (SyntaxError, IndentationError) as exc:
+        except SyntaxError as exc:
             line_no = exc.lineno or 0
             warnings.append(
                 MiningWarning(

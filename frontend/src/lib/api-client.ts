@@ -34,9 +34,9 @@ export class ApiError extends Error {
 }
 
 class ApiClient {
-  private tokenGetter: (() => string | null) | null = null;
+  private tokenGetter: (() => string | null | Promise<string | null>) | null = null;
 
-  public setTokenGetter(fn: () => string | null) {
+  public setTokenGetter(fn: () => string | null | Promise<string | null>) {
     this.tokenGetter = fn;
   }
 
@@ -49,7 +49,7 @@ class ApiClient {
 
     headers.set("Content-Type", "application/json");
 
-    const token = this.tokenGetter ? this.tokenGetter() : null;
+    const token = this.tokenGetter ? await this.tokenGetter() : null;
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }

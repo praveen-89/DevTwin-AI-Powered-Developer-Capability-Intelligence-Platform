@@ -427,7 +427,7 @@ async def test_persist_evidence_success():
     assert result.total_evidence == 2
     assert result.evidence_by_polarity["positive"] == 1
     assert result.evidence_by_polarity["negative"] == 1
-    assert mock_session.flush.await_count == 1
+    assert mock_session.flush.await_count >= 1
     # Check that delete was executed for idempotency
     assert mock_session.execute.await_count >= 1
 

@@ -164,4 +164,41 @@ describe("AddRepositoryDialog", () => {
     const submitBtn = screen.getByRole("button", { name: /Register Repository/i });
     expect(submitBtn).toBeDisabled();
   });
+
+  it("displays actionable failure state when getGitHubRepositories returns 404 endpoint not found", async () => {
+    vi.spyOn(apiClient, "getProjects").mockResolvedValue(mockProjects);
+    vi.spyOn(apiClient, "getGitHubRepositories").mockRejectedValue(
+      new ApiError(404, "Not Found", "Not Found")
+    );
+
+    render(<AddRepositoryDialog isOpen={true} onClose={vi.fn()} onSuccess={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Unable to retrieve GitHub repositories/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/GitHub repository service endpoint not found \(HTTP 404\)/i).length).toBeGreaterThan(0);
+    });
+
+    // Must NOT mask as empty repository list
+    expect(
+      screen.queryByText(/No accessible repositories found for your GitHub App installation/i)
+    ).toBeNull();
+  });
+
+  it("displays permissions failure state when getGitHubRepositories returns 403", async () => {
+    vi.spyOn(apiClient, "getProjects").mockResolvedValue(mockProjects);
+    vi.spyOn(apiClient, "getGitHubRepositories").mockRejectedValue(
+      new ApiError(403, "Forbidden", "GitHub App installation lacks access to list repositories.")
+    );
+
+    render(<AddRepositoryDialog isOpen={true} onClose={vi.fn()} onSuccess={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Unable to retrieve GitHub repositories/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/lacks access to list repositories/i).length).toBeGreaterThan(0);
+    });
+
+    expect(
+      screen.queryByText(/No accessible repositories found for your GitHub App installation/i)
+    ).toBeNull();
+  });
 });

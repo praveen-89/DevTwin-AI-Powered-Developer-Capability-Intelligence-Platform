@@ -154,13 +154,8 @@ async def test_github_callback_success(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "success"
-        assert data["github_username"] == "testuser"
-        assert "detail" in data
-        # installations_count must NOT appear in Step 5C response
-        assert "installations_count" not in data
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
 
         # Verify state is claimed
         mock_claim.assert_awaited_once_with(mock_session, "valid_state")
@@ -170,17 +165,17 @@ async def test_github_callback_success(app):
         mock_get_user.assert_awaited_once_with(test_token)
         mock_list_installations.assert_awaited_once_with(test_token)
 
-        # OAuth token must NOT appear in the response
-        assert test_token not in str(data)
-        # developer_id must NOT appear in the response
-        assert str(developer_id) not in str(data)
+        # OAuth token must NOT appear in the location
+        assert test_token not in response.headers["location"]
+        # developer_id must NOT appear in the location
+        assert str(developer_id) not in response.headers["location"]
 
     app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
 async def test_github_callback_empty_installations(app):
-    """Callback with zero installations still completes account linking successfully."""
+    """Callback with zero installations still completes account linking successfully and redirects."""
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
 
@@ -205,11 +200,8 @@ async def test_github_callback_empty_installations(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "success"
-        # installations_count must not be in Step 5C response
-        assert "installations_count" not in data
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
 
     app.dependency_overrides.clear()
 
@@ -220,7 +212,7 @@ async def test_github_callback_empty_installations(app):
 
 @pytest.mark.asyncio
 async def test_github_callback_account_new_insert(app):
-    """Case 1: No existing row → new GitHubAccount is inserted with correct fields."""
+    """Case 1: No existing row → new GitHubAccount is inserted with correct fields and redirects."""
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
     from app.models.github_account import GitHubAccount
@@ -244,10 +236,8 @@ async def test_github_callback_account_new_insert(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "success"
-        assert data["github_username"] == "newuser"
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
 
         # Verify session.add was called with a GitHubAccount with correct fields
         mock_session.add.assert_called_once()
@@ -297,10 +287,8 @@ async def test_github_callback_account_reconnect_same_developer(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "success"
-        assert data["github_username"] == "newname"
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
 
         # Existing row must be mutated in-place (no new add)
         mock_session.add.assert_not_called()
@@ -312,7 +300,7 @@ async def test_github_callback_account_reconnect_same_developer(app):
 
 @pytest.mark.asyncio
 async def test_github_callback_account_conflict_different_developer(app):
-    """Case 3: Existing row belongs to different developer → 409 Conflict."""
+    """Case 3: Existing row belongs to different developer → 302 redirect with account_conflict."""
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
     from app.models.github_account import GitHubAccount
@@ -346,15 +334,14 @@ async def test_github_callback_account_conflict_different_developer(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 409
-        detail = response.json()["detail"]
-        assert "already linked to another developer" in detail
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=account_conflict"
         # Existing row must be untouched
         assert existing.username == "originalowner"
         assert existing.developer_id == owner_developer_id
-        # No internal identifiers in response
-        assert str(owner_developer_id) not in detail
-        assert str(requesting_developer_id) not in detail
+        # No internal identifiers in location header
+        assert str(owner_developer_id) not in response.headers["location"]
+        assert str(requesting_developer_id) not in response.headers["location"]
 
     app.dependency_overrides.clear()
 
@@ -396,7 +383,8 @@ async def test_github_callback_integrity_error_same_developer_race(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
         mock_session.rollback.assert_called_once()
 
     app.dependency_overrides.clear()
@@ -404,7 +392,7 @@ async def test_github_callback_integrity_error_same_developer_race(app):
 
 @pytest.mark.asyncio
 async def test_github_callback_integrity_error_different_developer_race(app):
-    """IntegrityError during INSERT, re-query shows different developer → 409."""
+    """IntegrityError during INSERT, re-query shows different developer → 302 redirect with account_conflict."""
     from sqlalchemy.exc import IntegrityError as SAIntegrityError
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
@@ -439,7 +427,8 @@ async def test_github_callback_integrity_error_different_developer_race(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 409
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=account_conflict"
         mock_session.rollback.assert_called_once()
 
     app.dependency_overrides.clear()
@@ -447,7 +436,7 @@ async def test_github_callback_integrity_error_different_developer_race(app):
 
 @pytest.mark.asyncio
 async def test_github_callback_integrity_error_developer_uniqueness_conflict(app):
-    """IntegrityError caused by developer_id uniqueness → 409."""
+    """IntegrityError caused by developer_id uniqueness → 302 redirect with developer_conflict."""
     from sqlalchemy.exc import IntegrityError as SAIntegrityError
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
@@ -462,9 +451,6 @@ async def test_github_callback_integrity_error_developer_uniqueness_conflict(app
         disconnected_at=None,
     )
 
-    # First call: None (during the first check)
-    # Second call: None (during github_id check in the IntegrityError block)
-    # Third call: existing_other_account (during developer_id check in the IntegrityError block)
     mock_session = make_db_session([None, None, existing_other_account])
     mock_session.commit.side_effect = SAIntegrityError("dup", None, Exception("dup"))
     app.dependency_overrides[get_db_session] = lambda: mock_session
@@ -484,9 +470,8 @@ async def test_github_callback_integrity_error_developer_uniqueness_conflict(app
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 409
-        detail = response.json()["detail"]
-        assert "already have a linked GitHub account" in detail
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=developer_conflict"
         mock_session.rollback.assert_called_once()
 
     app.dependency_overrides.clear()
@@ -494,7 +479,7 @@ async def test_github_callback_integrity_error_developer_uniqueness_conflict(app
 
 @pytest.mark.asyncio
 async def test_github_callback_db_failure_returns_500(app):
-    """Unexpected DB exception during INSERT returns sanitized 500."""
+    """Unexpected DB exception during INSERT returns sanitized 302 redirect with linking_failed."""
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
 
@@ -517,18 +502,15 @@ async def test_github_callback_db_failure_returns_500(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 500
-        detail = response.json()["detail"]
-        # Must not expose internal DB error string
-        assert "DB connection lost" not in detail
-        assert "connection" not in detail.lower()
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=linking_failed"
 
     app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
 async def test_github_callback_response_has_no_sensitive_fields(app):
-    """Success response must not contain token, code, verifier, or DB IDs."""
+    """Success response must not contain token, code, verifier, or DB IDs in redirect location."""
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
 
@@ -552,14 +534,14 @@ async def test_github_callback_response_has_no_sensitive_fields(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=secret_code_value")
 
-        assert response.status_code == 200
-        body = str(response.json())
+        assert response.status_code == 302
+        location = response.headers["location"]
 
-        assert secret_token not in body
-        assert "secret_code_value" not in body
-        assert "secret_pkce_verifier" not in body
-        assert str(developer_id) not in body
-        assert "installation_id" not in body
+        assert secret_token not in location
+        assert "secret_code_value" not in location
+        assert "secret_pkce_verifier" not in location
+        assert str(developer_id) not in location
+        assert "installation_id" not in location
 
     app.dependency_overrides.clear()
 
@@ -579,7 +561,6 @@ async def test_github_callback_account_linking_no_installation_id(app):
         code_verifier="test_verifier",
         state_id=uuid.uuid4(),
     )
-    # Even with multiple installations returned, installation_id must stay NULL
     mock_installations = [
         GitHubInstallation(installation_id=111, account_github_id=99, account_login="org1"),
         GitHubInstallation(installation_id=222, account_github_id=99, account_login="org2"),
@@ -594,7 +575,8 @@ async def test_github_callback_account_linking_no_installation_id(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
         added = mock_session.add.call_args[0][0]
         assert isinstance(added, GitHubAccount)
         assert added.installation_id is None
@@ -664,15 +646,15 @@ async def test_github_callback_user_api_http_error(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
-        assert response.status_code == 502
-        assert "verify GitHub identity" in response.json()["detail"]
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=identity_failed"
         mock_list.assert_not_called()
 
     app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_github_callback_user_api_response_error(app):
-    """Malformed GitHub user response returns 502."""
+    """Malformed GitHub user response redirects with identity_failed."""
     import uuid
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken
@@ -695,15 +677,15 @@ async def test_github_callback_user_api_response_error(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
-        assert response.status_code == 502
-        assert "malformed identity data" in response.json()["detail"]
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=identity_failed"
         mock_list.assert_not_called()
 
     app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_github_callback_installations_api_http_error(app):
-    """Failure fetching installations returns 502."""
+    """Failure fetching installations redirects with installations_failed."""
     import uuid
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
@@ -726,14 +708,14 @@ async def test_github_callback_installations_api_http_error(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
-        assert response.status_code == 502
-        assert "verify GitHub installations" in response.json()["detail"]
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=installations_failed"
 
     app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_github_callback_installations_api_response_error(app):
-    """Malformed installations response returns 502."""
+    """Malformed installations response redirects with installations_failed."""
     import uuid
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.client import OAuthToken, GitHubUser
@@ -756,32 +738,32 @@ async def test_github_callback_installations_api_response_error(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
-        assert response.status_code == 502
-        assert "malformed installations data" in response.json()["detail"]
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=installations_failed"
 
     app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_github_callback_oauth_error(app):
-    """An error from GitHub stops the flow."""
+    """An error from GitHub stops the flow and redirects to access_denied."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
         response = await client.get("/github/callback?state=xyz&error=access_denied")
 
-    assert response.status_code == 400
-    assert "GitHub OAuth authorization failed" in response.json()["detail"]
+    assert response.status_code == 302
+    assert response.headers["location"] == "http://localhost:3000/?github_error=access_denied"
 
 @pytest.mark.asyncio
 async def test_github_callback_missing_code(app):
-    """Missing code with no error stops the flow."""
+    """Missing code with no error stops the flow and redirects to missing_code."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
         response = await client.get("/github/callback?state=xyz")
 
-    assert response.status_code == 400
-    assert "code missing" in response.json()["detail"].lower()
+    assert response.status_code == 302
+    assert response.headers["location"] == "http://localhost:3000/?github_error=missing_code"
 
 @pytest.mark.asyncio
 async def test_github_callback_unknown_state(app):
-    """Unknown state is safely rejected."""
+    """Unknown state is safely rejected and redirects with state_expired."""
     from app.services.github.state import GitHubStateNotFoundError
 
     mock_session = AsyncMock()
@@ -793,15 +775,15 @@ async def test_github_callback_unknown_state(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=unknown&code=xyz")
 
-        assert response.status_code == 400
-        assert "Invalid or expired OAuth state" in response.json()["detail"]
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=state_expired"
         mock_exchange.assert_not_called()
 
     app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_github_callback_expired_or_replayed_state(app):
-    """Expired or replayed state is safely rejected."""
+    """Expired or replayed state is safely rejected and redirects with state_expired."""
     from app.services.github.state import GitHubStateExpiredError
 
     mock_session = AsyncMock()
@@ -813,15 +795,15 @@ async def test_github_callback_expired_or_replayed_state(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=expired&code=xyz")
 
-        assert response.status_code == 400
-        assert "Invalid or expired OAuth state" in response.json()["detail"]
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=state_expired"
         mock_exchange.assert_not_called()
 
     app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_github_callback_exchange_failure(app, caplog):
-    """A failure during token exchange is sanitized and logged safely."""
+    """A failure during token exchange is sanitized, redirects with exchange_failed, and logs safely."""
     import uuid
     from app.services.github.state import GitHubOAuthStateContext
     from app.services.github.exceptions import GitHubHTTPError
@@ -844,8 +826,8 @@ async def test_github_callback_exchange_failure(app, caplog):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=xyz&code=secret_code_value")
 
-        assert response.status_code == 502
-        assert "Failed to exchange authorization code" in response.json()["detail"]
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github_error=exchange_failed"
 
     # Check app logs for secret exposure (httpx request logs the URL, which we ignore)
     app_logs = [record.message for record in caplog.records if record.name.startswith("app.")]
@@ -928,7 +910,8 @@ async def test_github_callback_installation_exact_personal_match(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id == 456
 
@@ -963,7 +946,8 @@ async def test_github_callback_installation_multiple_with_one_personal(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id == 456
 
@@ -997,7 +981,8 @@ async def test_github_callback_installation_only_org_installations(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id is None
 
@@ -1027,7 +1012,8 @@ async def test_github_callback_installation_zero_installations(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id is None
 
@@ -1068,7 +1054,8 @@ async def test_github_callback_reconnect_preserves_installation_if_unchanged(app
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=s&code=c")
 
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.headers["location"] == "http://localhost:3000/?github=success"
         assert existing.installation_id == 456
         assert existing.username == "newname"
         mock_session.commit.assert_awaited_once()
@@ -1736,4 +1723,37 @@ async def test_client_list_installation_repositories_pagination():
     assert len(repos) == 3
     assert [r["id"] for r in repos] == [1, 2, 3]
     assert mock_req.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_github_callback_open_redirect_prevented(app):
+    """
+    Arbitrary redirect parameters in the query string must NEVER be respected.
+    Redirect destination is strictly dictated by settings.FRONTEND_URL.
+    """
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        # Attacker attempts to pass redirect_to or next parameter
+        response = await client.get("/github/callback?state=xyz&redirect_to=https://evil.com&next=https://attacker.org")
+
+    assert response.status_code == 302
+    location = response.headers["location"]
+    assert location.startswith("http://localhost:3000/")
+    assert "evil.com" not in location
+    assert "attacker.org" not in location
+    assert "github_error=missing_code" in location
+
+
+@pytest.mark.asyncio
+async def test_github_callback_respects_custom_frontend_url(app):
+    """
+    If FRONTEND_URL is customized in settings, redirects target that configured URL.
+    """
+    with patch("app.api.routes.github.get_settings") as mock_settings:
+        mock_settings.return_value.FRONTEND_URL = "https://app.devtwin.io"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=xyz&error=access_denied")
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "https://app.devtwin.io/?github_error=access_denied"
+
 

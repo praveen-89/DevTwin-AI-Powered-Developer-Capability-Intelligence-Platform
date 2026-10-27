@@ -9,6 +9,7 @@ import logging
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -104,50 +105,42 @@ async def get_github_install_url(
 
     return {"install_url": install_url}
 
+def _frontend_redirect(param: str, value: str) -> RedirectResponse:
+    settings = get_settings()
+    base_url = settings.FRONTEND_URL.rstrip("/")
+    query = urlencode({param: value})
+    target_url = f"{base_url}/?{query}"
+    return RedirectResponse(url=target_url, status_code=status.HTTP_302_FOUND)
+
+
 @router.get("/callback")
 async def github_callback(
     state: str = Query(..., description="OAuth state from GitHub"),
     code: str | None = Query(None, description="OAuth authorization code"),
     error: str | None = Query(None, description="OAuth error from GitHub"),
     session: AsyncSession = Depends(get_db_session)
-) -> dict:
+) -> RedirectResponse:
     """
     Handle GitHub App OAuth callback.
+    Redirects the browser back to the frontend with safe status indicators.
+    Never exposes internal IDs, codes, tokens, or stack traces in redirect URLs.
     """
     if error:
-        logger.warning("GitHub OAuth callback received an error response.")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="GitHub OAuth authorization failed."
-        )
+        logger.warning("GitHub OAuth callback received an error response from GitHub: %s", error)
+        return _frontend_redirect("github_error", "access_denied")
 
     if not code:
         logger.warning("GitHub OAuth callback received without code.")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="GitHub OAuth authorization code missing."
-        )
+        return _frontend_redirect("github_error", "missing_code")
 
     try:
         state_context = await claim_state(session, state)
-    except GitHubStateNotFoundError:
-        logger.warning("GitHub OAuth state rejected: unknown state.")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired OAuth state."
-        )
-    except GitHubStateExpiredError:
-        logger.warning("GitHub OAuth state rejected: expired or already used.")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired OAuth state."
-        )
+    except (GitHubStateNotFoundError, GitHubStateExpiredError):
+        logger.warning("GitHub OAuth state rejected: invalid, expired, or already used.")
+        return _frontend_redirect("github_error", "state_expired")
     except Exception:
         logger.error("Unexpected error during OAuth state validation.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to validate OAuth state."
-        )
+        return _frontend_redirect("github_error", "state_validation_failed")
 
     client = GitHubClient()
     try:
@@ -157,58 +150,28 @@ async def github_callback(
         )
     except GitHubHTTPError:
         logger.error("GitHub OAuth exchange failed.")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to exchange authorization code with GitHub."
-        )
+        return _frontend_redirect("github_error", "exchange_failed")
     except Exception:
         logger.error("Unexpected error during OAuth token exchange.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error during token exchange."
-        )
+        return _frontend_redirect("github_error", "exchange_failed")
 
     try:
         github_user = await client.get_authenticated_user(oauth_token.access_token)
-    except GitHubHTTPError:
-        logger.error("Failed to fetch GitHub user profile.")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to verify GitHub identity."
-        )
-    except GitHubResponseError:
-        logger.error("Invalid response from GitHub user profile API.")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Received malformed identity data from GitHub."
-        )
+    except (GitHubHTTPError, GitHubResponseError):
+        logger.error("Failed to verify GitHub user identity.")
+        return _frontend_redirect("github_error", "identity_failed")
     except Exception:
         logger.error("Unexpected error fetching GitHub user.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error during identity verification."
-        )
+        return _frontend_redirect("github_error", "identity_failed")
 
     try:
         installations = await client.list_user_installations(oauth_token.access_token)
-    except GitHubHTTPError:
-        logger.error("Failed to fetch GitHub user installations.")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to verify GitHub installations."
-        )
-    except GitHubResponseError:
-        logger.error("Invalid response from GitHub installations API.")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Received malformed installations data from GitHub."
-        )
+    except (GitHubHTTPError, GitHubResponseError):
+        logger.error("Failed to verify GitHub installations.")
+        return _frontend_redirect("github_error", "installations_failed")
     except Exception:
         logger.error("Unexpected error fetching GitHub installations.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error during installation verification."
-        )
+        return _frontend_redirect("github_error", "installations_failed")
 
     # Discard OAuth token — it must not be persisted, logged, or returned.
     # All identity information is already captured in github_user.
@@ -271,7 +234,6 @@ async def github_callback(
             if race_account is None:
                 # The IntegrityError was not caused by a concurrent insert of this github_id.
                 # It must have been caused by the developer_id UNIQUE constraint.
-                # Let's verify this safely.
                 dev_check_result = await session.execute(
                     select(GitHubAccount).where(
                         GitHubAccount.developer_id == state_context.developer_id
@@ -279,16 +241,10 @@ async def github_callback(
                 )
                 if dev_check_result.scalar_one_or_none() is not None:
                     logger.warning("Developer already has a different GitHub account linked.")
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="You already have a linked GitHub account."
-                    )
+                    return _frontend_redirect("github_error", "developer_conflict")
 
                 logger.error("Unexpected state: IntegrityError but no row found after rollback.")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="An internal error occurred during account linking."
-                )
+                return _frontend_redirect("github_error", "linking_failed")
 
             if race_account.developer_id == state_context.developer_id:
                 # Same developer won the race — treat as a reconnect.
@@ -300,24 +256,15 @@ async def github_callback(
                 except Exception:
                     await session.rollback()
                     logger.error("Failed to persist reconnect after race condition.")
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="An internal error occurred during account linking."
-                    )
+                    return _frontend_redirect("github_error", "linking_failed")
             else:
                 # Different developer owns this GitHub account.
                 logger.warning("GitHub account conflict detected during race condition.")
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="This GitHub account is already linked to another developer."
-                )
+                return _frontend_redirect("github_error", "account_conflict")
         except Exception:
             await session.rollback()
             logger.error("Unexpected database error during GitHub account creation.")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An internal error occurred during account linking."
-            )
+            return _frontend_redirect("github_error", "linking_failed")
 
     elif existing_account.developer_id == state_context.developer_id:
         # Case 2 — Same developer: reconnect / reauthorization.
@@ -331,27 +278,15 @@ async def github_callback(
         except Exception:
             await session.rollback()
             logger.error("Unexpected database error during GitHub account reconnect.")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An internal error occurred during account linking."
-            )
+            return _frontend_redirect("github_error", "linking_failed")
 
     else:
         # Case 3 — GitHub account belongs to a different developer.
-        # Sanitized 409 — no internal identifiers exposed.
         logger.warning("GitHub account ownership conflict: account belongs to another developer.")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This GitHub account is already linked to another developer."
-        )
+        return _frontend_redirect("github_error", "account_conflict")
 
-    logger.info("GitHub account linking complete.")
-
-    return {
-        "status": "success",
-        "detail": "GitHub account linked successfully.",
-        "github_username": github_user.username,
-    }
+    logger.info("GitHub account linking complete. Redirecting to frontend.")
+    return _frontend_redirect("github", "success")
 
 
 @router.get("/status", response_model=GitHubStatusResponse)

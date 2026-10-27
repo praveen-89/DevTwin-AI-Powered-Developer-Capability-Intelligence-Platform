@@ -370,6 +370,7 @@ async def get_developer_capability_history(
             target_type="unknown",
             target_id=uuid.uuid4(),
             target_name="Unknown",
+            domain_or_category=None,
         )
         items.append(
             CapabilityHistoryItemResponse(

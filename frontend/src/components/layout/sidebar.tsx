@@ -117,7 +117,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
         {NAV_ITEMS.map((item) => {
           const isActive =
-            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            item.href === "/" ? pathname === "/" : Boolean(pathname?.startsWith(item.href));
           return (
             <NavLink key={item.href} item={item} collapsed={collapsed} isActive={isActive} />
           );

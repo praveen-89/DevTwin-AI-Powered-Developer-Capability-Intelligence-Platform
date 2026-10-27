@@ -20,6 +20,7 @@ export function AddRepositoryDialog({ isOpen, onClose, onSuccess }: AddRepositor
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [repoError, setRepoError] = useState<string | null>(null);
 
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [githubRepos, setGithubRepos] = useState<GitHubRepositoryOption[]>([]);
@@ -37,6 +38,7 @@ export function AddRepositoryDialog({ isOpen, onClose, onSuccess }: AddRepositor
   useEffect(() => {
     if (!isOpen) {
       setError(null);
+      setRepoError(null);
       setSearchFilter("");
       return;
     }
@@ -45,6 +47,7 @@ export function AddRepositoryDialog({ isOpen, onClose, onSuccess }: AddRepositor
     async function loadData() {
       setLoading(true);
       setError(null);
+      setRepoError(null);
 
       try {
         const [projResult, repoResult] = await Promise.allSettled([
@@ -75,6 +78,7 @@ export function AddRepositoryDialog({ isOpen, onClose, onSuccess }: AddRepositor
         if (repoResult.status === "fulfilled") {
           const repos = repoResult.value;
           setGithubRepos(repos);
+          setRepoError(null);
           if (repos.length > 0) {
             setSelectedRepoId(repos[0].github_repo_id);
           } else {
@@ -82,7 +86,21 @@ export function AddRepositoryDialog({ isOpen, onClose, onSuccess }: AddRepositor
           }
         } else {
           hadError = true;
-          const detail = repoResult.reason instanceof ApiError ? repoResult.reason.detail : "Failed to load GitHub repositories.";
+          let detail = "Failed to load GitHub repositories.";
+          if (repoResult.reason instanceof ApiError) {
+            if (repoResult.reason.status === 404) {
+              detail = "GitHub repository service endpoint not found (HTTP 404). Please ensure the backend server is running.";
+            } else if (repoResult.reason.status === 401) {
+              detail = "Session expired. Please sign in again to access GitHub repositories.";
+            } else if (repoResult.reason.status === 403) {
+              detail = "GitHub App installation lacks access to list repositories. Please review app permissions on GitHub.";
+            } else if (repoResult.reason.status === 502) {
+              detail = repoResult.reason.detail || "Failed to communicate with GitHub. Please check your GitHub App configuration.";
+            } else {
+              detail = repoResult.reason.detail || detail;
+            }
+          }
+          setRepoError(detail);
           errMsg = errMsg ? `${errMsg} | ${detail}` : detail;
         }
 
@@ -271,7 +289,17 @@ export function AddRepositoryDialog({ isOpen, onClose, onSuccess }: AddRepositor
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-slate-300">Select GitHub Repository</label>
 
-                  {githubRepos.length === 0 ? (
+                  {repoError ? (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-center space-y-2">
+                      <GitBranch className="h-6 w-6 text-amber-400/80 mx-auto" aria-hidden="true" />
+                      <p className="text-xs text-amber-300 font-medium">
+                        Unable to retrieve GitHub repositories
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {repoError}
+                      </p>
+                    </div>
+                  ) : githubRepos.length === 0 ? (
                     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-center space-y-2">
                       <GitBranch className="h-6 w-6 text-slate-500 mx-auto" aria-hidden="true" />
                       <p className="text-xs text-slate-400">

@@ -21,6 +21,7 @@ from app.models.taxonomy import (
     SkillRelationship,
 )
 from app.models.risk_finding import RiskFinding
+from app.models.commit import Commit
 from app.models.evidence import (
     Evidence,
     EvidenceSkill,
@@ -52,6 +53,7 @@ __all__ = [
     "TechnologyConcept",
     "SkillRelationship",
     "RiskFinding",
+    "Commit",
     "Evidence",
     "EvidenceSkill",
     "EvidenceTechnology",

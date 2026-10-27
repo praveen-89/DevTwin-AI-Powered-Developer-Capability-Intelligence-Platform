@@ -262,6 +262,11 @@ async def fetch_repository_for_job(
         app_jwt=app_jwt,
     )
 
+    if repo.github_repo_id is None:
+        raise RepositoryNotFoundError(
+            f"Repository {repo.id} has no GitHub repo ID and cannot be fetched."
+        )
+
     try:
         # 5. Resolve trusted repo metadata from GitHub using installation token
         repo_data = await client.get_installation_repository(

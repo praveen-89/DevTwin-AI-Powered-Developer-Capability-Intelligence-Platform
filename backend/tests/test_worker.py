@@ -626,6 +626,7 @@ async def test_execute_job_run_failure():
 
     assert run.status == "FAILED"
     assert run.error_code == "GITHUB_HTTP_404"
+    assert run.error_message is not None
     assert "GitHub API error (404)" in run.error_message
     assert job.status == "FAILED"
     assert job.completed_at is not None
@@ -665,7 +666,8 @@ class MockStreamContext:
     def raise_for_status(self):
         if self.status_code >= 400:
             import httpx
-            raise httpx.HTTPStatusError("error", request=None, response=MagicMock(status_code=self.status_code))
+            _req = httpx.Request("GET", "https://api.github.com")
+            raise httpx.HTTPStatusError("error", request=_req, response=MagicMock(status_code=self.status_code))
 
     async def aiter_bytes(self):
         for c in self._chunks:

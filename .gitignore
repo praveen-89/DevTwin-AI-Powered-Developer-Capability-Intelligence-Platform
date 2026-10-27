@@ -23,6 +23,14 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
 # Node
 node_modules/
 npm-debug.log*
@@ -33,17 +41,12 @@ yarn-error.log*
 # Next.js
 .next/
 out/
-build/
 
-# Environment
+# Environment files
 .env
 .env.*
 !.env.example
-.venv
-venv/
-ENV/
-env.bak/
-venv.bak/
+!frontend/.env.example
 
 # Secrets & Credentials
 *.pem
@@ -54,9 +57,49 @@ secrets/
 secrets.json
 *secret*
 
-# IDE
+# IDE & Editor
 .idea/
 .vscode/
 *.swp
 *.swo
+*.swo
+Thumbs.db
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+ehthumbs.db
+
+# Type checkers & linters
+pyrightconfig.json
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# Test & coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+coverage.xml
+*.cover
+nosetests.xml
+test-results/
+junit*.xml
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Temporary / runtime
+*.tmp
+*.temp
+tmp/
+temp/

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient, ApiError } from "@/lib/api-client";
-import type { RepositoryResponse, AnalysisJobResponse, AnalysisRunResponse } from "@/types/api";
+import type { RepositoryResponse, AnalysisJobResponse, AnalysisRunResponse, AnalysisRunStatus } from "@/types/api";
 import { Shell, PageContainer, PageHeading } from "@/components/layout/shell";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, StatusBadge } from "@/components/ui/badge";
@@ -35,6 +35,30 @@ export default function RepositoriesPage() {
       .catch((err) => setError(err instanceof ApiError ? err.detail : "Failed to load repositories."))
       .finally(() => setLoading(false));
   }, [token]);
+
+  // Poll active analysis job for the selected repository
+  useEffect(() => {
+    if (!selectedId) return;
+    const currentJob = jobs[selectedId];
+    if (!currentJob || currentJob.status === "COMPLETED" || currentJob.status === "FAILED") {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const updatedJob = await apiClient.getAnalysisJob(currentJob.id);
+        const runsList = await apiClient.getAnalysisJobRuns(currentJob.id);
+        const latestRun = runsList.length > 0 ? runsList[runsList.length - 1] : null;
+
+        setJobs((prev) => ({ ...prev, [selectedId]: updatedJob }));
+        setRuns((prev) => ({ ...prev, [selectedId]: latestRun }));
+      } catch {
+        // Polling silent error
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [selectedId, jobs]);
 
   const selectedRepo = repos.find((r) => r.id === selectedId);
 
@@ -171,8 +195,20 @@ export default function RepositoriesPage() {
                         <StatusBadge status={jobs[selectedRepo.id].status} />
                       </CardHeader>
                       <CardBody className="space-y-4">
-                        {runs[selectedRepo.id] && (
-                          <StageStepper currentStatus={runs[selectedRepo.id]!.status} />
+                        <StageStepper
+                          currentStatus={
+                            (runs[selectedRepo.id]?.status ??
+                              (jobs[selectedRepo.id].status === "QUEUED"
+                                ? "QUEUED"
+                                : jobs[selectedRepo.id].status === "FAILED"
+                                ? "FAILED"
+                                : "FETCHING")) as AnalysisRunStatus
+                          }
+                        />
+                        {runs[selectedRepo.id]?.error_message && (
+                          <p className="text-xs text-red-400 font-mono">
+                            {runs[selectedRepo.id]!.error_message}
+                          </p>
                         )}
                       </CardBody>
                     </Card>
@@ -188,11 +224,16 @@ export default function RepositoriesPage() {
                           leftIcon={<Play className="h-3.5 w-3.5" />}
                           onClick={async () => {
                             try {
+                              setError(null);
                               const created = await apiClient.submitAnalysisJob(selectedRepo.id);
                               const fullJob = await apiClient.getAnalysisJob(created.id);
                               setJobs((j) => ({ ...j, [selectedRepo.id]: fullJob }));
                               setRuns((r) => ({ ...r, [selectedRepo.id]: null }));
-                            } catch { /* handled by error state */ }
+                            } catch (err) {
+                              setError(
+                                err instanceof ApiError ? err.detail : "Failed to submit analysis job."
+                              );
+                            }
                           }}
                         >
                           Run Analysis

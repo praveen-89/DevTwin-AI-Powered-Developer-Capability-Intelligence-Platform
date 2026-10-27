@@ -5,6 +5,8 @@ Loads all configuration from environment variables.
 Never stores secrets in source code.
 """
 
+from pathlib import Path
+from urllib.parse import urlsplit
 from functools import lru_cache
 from cryptography.fernet import Fernet
 from pydantic import Field, field_validator
@@ -51,11 +53,33 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed origins, e.g. http://localhost:3000
     CORS_ORIGINS: str = "http://localhost:3000"
 
+    # ── Frontend Integration ───────────────────────────────────────
+    # Target URL for OAuth callbacks and browser redirects
+    FRONTEND_URL: str = "http://localhost:3000"
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            str(Path(__file__).resolve().parent.parent.parent / ".env"),
+            ".env",
+        ),
         env_file_encoding="utf-8",
         case_sensitive=True,
     )
+
+    @field_validator("FRONTEND_URL")
+    @classmethod
+    def validate_frontend_url(cls, v: str) -> str:
+        v_clean = v.strip().rstrip("/")
+        if "\n" in v_clean or "\r" in v_clean:
+            raise ValueError("FRONTEND_URL must not contain control characters or newlines.")
+        parsed = urlsplit(v_clean)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("FRONTEND_URL must use http or https scheme.")
+        if not parsed.netloc or not parsed.hostname:
+            raise ValueError("FRONTEND_URL must include a valid hostname.")
+        if parsed.username or parsed.password:
+            raise ValueError("FRONTEND_URL must not contain embedded user credentials.")
+        return v_clean
 
     @field_validator("GITHUB_STATE_ENCRYPTION_KEY")
     @classmethod

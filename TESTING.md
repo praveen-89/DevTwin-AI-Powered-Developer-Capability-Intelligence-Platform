@@ -1,7 +1,7 @@
 ---
 Status: Active
-Version: 1.1
-Last Updated: 2026-09-08
+Version: 1.4
+Last Updated: 2026-10-26
 Source of Truth: TESTING.md
 ---
 
@@ -16,7 +16,7 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 `Unit -> Integration -> System -> End-to-End`
 
 ## Backend Testing
-*   **Current Status**: `pytest -q` -> 367 passed, 15 pre-existing mock warnings.
+*   **Current Status**: `pytest -q` -> 385 passed, 15 pre-existing mock warnings (Checkpoint 25, 2026-10-26).
 *   **Scope**: Covers foundation, health checks, configuration, developer registration, projects, repositories (registration, listing, retrieval), GitHub connection/disconnect flows, analysis pipeline job submission/polling (`test_analysis.py`), worker runner queue claiming, attempt tracking, safe repository extraction, isolated temporary workspace lifecycle, non-terminal `CAPABILITY`/`PROCESSING` lifecycle state, repeated-invocation safety, error sanitization (`test_worker.py`), repository mining file-tree traversal, exclusions, language classification, defensive manifest extraction (`package.json`, `requirements.txt`, `Cargo.toml`), Python AST parsing, archive streaming/extraction limits (`test_mining.py`), SkillGraph deterministic entity and taxonomy mapping, AST concept extraction, provenance-backed observations, deduplication, snapshot persistence (`test_skillgraph.py`), CodeRisk static risk analysis rules, secret redaction, safe AST detection for subprocess with shell=True, run-scoped idempotency without observation orphaning, snapshot persistence, and worker lifecycle integration (`test_coderisk.py`), Evidence Generation observation contextualization, reliability/strength/polarity assignment, taxonomy junction linking, idempotency, and rollback handling (`test_evidence.py`), Capability Scoring Engine deterministic mathematical aggregation, fine-grained evidence strength preservation, diminishing returns, temporal half-life decay, uncertainty-aware confidence calculation, exclusive-arc validation, run-scoped idempotency, and history append logging (`test_capability.py`), and RLS NULL ownership regression guards.
 *   **API Tests**: Validate REST endpoints, payload shapes, ownership isolation, and HTTP status codes using FastAPI test clients.
 *   **Worker & Fetcher Tests**: Validate atomic queue claiming (`FOR UPDATE SKIP LOCKED`), maximum attempt bounding (`MAX_JOB_ATTEMPTS = 3`), terminal Stage 8 completion lifecycle (both `run.status == "COMPLETED"` and `job.status == "COMPLETED"` with populated `completed_at`), idempotency guard for already-COMPLETED jobs, repeated-invocation safety, Zip Slip / path traversal protection, corrupt archive recovery, ephemeral token cleanup, and sanitized error mapping.
@@ -64,11 +64,15 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 *   **RLS Integration**: (Future hardening) Runtime database-level RLS integration test to authenticate as Developer A and attempt to query Developer B's data.
 
 ## Frontend Testing
-*   **Unit Tests (`vitest run`)**: 36 passed across 2 suites:
+*   **Unit Tests (`vitest run`)**: 62 passed across 7 suites (Checkpoint 25):
     *   `skillgraph-canvas.test.ts`: 24 tests covering node/edge filtering, search, incident connectivity, and taxonomy colors.
     *   `capability-history-chart.test.ts`: 12 tests covering chronological sorting, Recharts data mapping, and rounding.
-*   **Linting (`eslint`)**: 0 errors, 0 warnings across all TypeScript and Next.js components.
-*   **Production Build (`next build`)**: Exit code 0, 7 static routes compiled and prerendered.
+    *   `add-repository-dialog.test.tsx`: 6 tests covering project/repo loading, search filter, create project mode, successful registration, error handling, and 409 conflict.
+    *   `auth-modal.test.tsx`: 9 tests covering modal open/close, Sign In / Sign Up tab switching, field validation, successful sign-in, error display, email confirmation notice, unconfigured fallback, and production mode safety guard.
+    *   `auth-context.test.tsx`: 5 tests covering Supabase session restoration on mount, 404 developer auto-provisioning, `signIn` token synchronization, `signOut` clearing, and graceful unconfigured-Supabase fallback with dev-token.
+    *   `overview-callback.test.tsx`: 3 tests covering `?github=success` success banner, `?github_error=access_denied` error banner, and banner dismiss + URL sanitization.
+    *   `repositories-page.test.tsx`: 3 tests covering unauthenticated prompt, repository listing + Run Analysis trigger in Queued stage, and analysis job error handling.
+*   **TypeScript (`npx tsc --noEmit`)**: Exit code 0, 0 type errors.
 
 ## End-to-End (E2E) Browser Testing (`npx playwright test`)
 *   **Status**: 21 passed, 26 skipped, 0 failed (47 total tests executed in headless Chromium).

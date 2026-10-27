@@ -153,3 +153,30 @@ def test_secrets_not_exposed_in_repr(monkeypatch):
     assert "N2F0d1VNb2h3Nnl4S3hZYmF0bzh1amV6dVpZcDJ2bXg=" not in s
     assert "pem-key" not in rep
     assert "pem-key" not in s
+
+
+def test_frontend_url_valid_and_normalized(monkeypatch):
+    """FRONTEND_URL accepts valid http/https URLs and strips trailing slash."""
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("FRONTEND_URL", "https://devtwin.example.com/ ")
+    from app.core.config import Settings
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.FRONTEND_URL == "https://devtwin.example.com"
+
+
+@pytest.mark.parametrize("invalid_url", [
+    "javascript:alert(1)",
+    "ftp://example.com",
+    "http://",
+    "http://user:pass@example.com",
+    "http://localhost:3000\r\nInjected: evil",
+])
+def test_frontend_url_rejects_unsafe_destinations(monkeypatch, invalid_url):
+    """FRONTEND_URL rejects non-http schemes, missing hosts, embedded credentials, and CRLF."""
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("FRONTEND_URL", invalid_url)
+    from app.core.config import Settings
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)  # type: ignore[call-arg]
+    assert "FRONTEND_URL" in [e["loc"][0] for e in exc_info.value.errors()]
+

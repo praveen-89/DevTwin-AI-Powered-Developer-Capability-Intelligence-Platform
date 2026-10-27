@@ -26,9 +26,10 @@ import { CardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, InlineError } from "@/components/ui/empty-state";
 import { StageStepper } from "@/components/ui/stage-stepper";
 import { ScoreGauge } from "@/components/ui/score-gauge";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import {
   AlertTriangle,
+  CheckCircle2,
   ExternalLink,
   GitBranch,
   Lock,
@@ -37,8 +38,49 @@ import {
   RefreshCw,
   Server,
   Globe,
+  X,
 } from "lucide-react";
 import { AddRepositoryDialog } from "@/components/repositories/add-repository-dialog";
+
+// ─── Feedback Banner ─────────────────────────────────────────────────────────
+
+function FeedbackBanner({
+  feedback,
+  onDismiss,
+}: {
+  feedback: { type: "success" | "error"; message: string };
+  onDismiss: () => void;
+}) {
+  const isSuccess = feedback.type === "success";
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "flex items-center justify-between gap-3 px-4 py-3 rounded-lg border text-xs sm:text-sm font-medium transition-all",
+        isSuccess
+          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+          : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        {isSuccess ? (
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" aria-hidden="true" />
+        ) : (
+          <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" aria-hidden="true" />
+        )}
+        <span>{feedback.message}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="p-1 rounded hover:bg-slate-800/40 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none focus:ring-1 focus:ring-slate-500"
+        aria-label="Dismiss message"
+      >
+        <X className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -535,6 +577,73 @@ export function OverviewView() {
   });
 
   const [isAddRepoOpen, setIsAddRepoOpen] = useState(false);
+  const [callbackFeedback, setCallbackFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // ── Intercept GitHub OAuth callback query parameters ─────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const github = params.get("github");
+    const githubError = params.get("github_error");
+
+    if (github === "success") {
+      setCallbackFeedback({
+        type: "success",
+        message: "GitHub account connected successfully! Your accessible repositories are ready.",
+      });
+      // Refresh status and repos immediately if authenticated
+      if (token) {
+        apiClient
+          .getGitHubStatus()
+          .then((ghStatus) => {
+            setState((s) => ({ ...s, githubStatus: ghStatus, githubError: null }));
+          })
+          .catch(() => {});
+        apiClient
+          .getRepositories()
+          .then((repos) => {
+            setState((s) => ({
+              ...s,
+              repositories: repos,
+              selectedRepoId: repos.length > 0 ? (s.selectedRepoId ?? repos[0].id) : null,
+            }));
+          })
+          .catch(() => {});
+      }
+    } else if (githubError) {
+      const errorMap: Record<string, string> = {
+        access_denied: "GitHub App authorization was cancelled or denied.",
+        missing_code: "GitHub did not return an authorization code. Please try again.",
+        state_expired:
+          "This authorization session has expired or was already completed. Check your GitHub connection below or try again.",
+        state_validation_failed: "Security validation failed for the authorization session.",
+        exchange_failed: "Failed to exchange authorization code with GitHub.",
+        identity_failed: "Could not verify your GitHub profile with GitHub.",
+        installations_failed: "Could not verify GitHub App installations for your account.",
+        account_conflict: "This GitHub account is already linked to another developer profile.",
+        developer_conflict: "Your profile already has a different GitHub account linked.",
+        linking_failed: "Failed to link your GitHub account. Please try again.",
+      };
+      setCallbackFeedback({
+        type: "error",
+        message:
+          errorMap[githubError] ?? "An error occurred while connecting your GitHub account.",
+      });
+    }
+
+    // Clean up consumed query parameters from URL without a page reload
+    if (github || githubError) {
+      params.delete("github");
+      params.delete("github_error");
+      const newQuery = params.toString();
+      const newUrl =
+        window.location.pathname + (newQuery ? `?${newQuery}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [token]);
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollAttemptsRef = useRef(0);
@@ -779,19 +888,27 @@ export function OverviewView() {
   // ── Unauthenticated state ────────────────────────────────────────────────
   if (!token) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
-        <div className="rounded-full bg-cyan-500/10 border border-cyan-500/20 p-5 mb-6">
-          <GitBranch className="h-8 w-8 text-cyan-400" aria-hidden="true" />
+      <div className="space-y-6">
+        {callbackFeedback && (
+          <FeedbackBanner
+            feedback={callbackFeedback}
+            onDismiss={() => setCallbackFeedback(null)}
+          />
+        )}
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
+          <div className="rounded-full bg-cyan-500/10 border border-cyan-500/20 p-5 mb-6">
+            <GitBranch className="h-8 w-8 text-cyan-400" aria-hidden="true" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-100 mb-2">Welcome to DevTwin</h2>
+          <p className="text-sm text-slate-400 max-w-sm leading-relaxed mb-6">
+            Sign in with your DevTwin backend token to view your developer capability
+            intelligence dashboard.
+          </p>
+          <p className="text-xs text-slate-500 bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-3 max-w-xs">
+            Use the <strong className="text-slate-300">Sign in</strong> button in the top-right
+            corner to enter your backend JWT.
+          </p>
         </div>
-        <h2 className="text-xl font-bold text-slate-100 mb-2">Welcome to DevTwin</h2>
-        <p className="text-sm text-slate-400 max-w-sm leading-relaxed mb-6">
-          Sign in with your DevTwin backend token to view your developer capability
-          intelligence dashboard.
-        </p>
-        <p className="text-xs text-slate-500 bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-3 max-w-xs">
-          Use the <strong className="text-slate-300">Sign in</strong> button in the top-right
-          corner to enter your backend JWT.
-        </p>
       </div>
     );
   }
@@ -811,6 +928,12 @@ export function OverviewView() {
 
   return (
     <div className="space-y-6">
+      {callbackFeedback && (
+        <FeedbackBanner
+          feedback={callbackFeedback}
+          onDismiss={() => setCallbackFeedback(null)}
+        />
+      )}
       {/* Developer context bar */}
       {developer && (
         <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-800/30 border border-slate-800/60 rounded-lg px-4 py-2.5">
