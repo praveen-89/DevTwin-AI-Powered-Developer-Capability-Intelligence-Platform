@@ -1,7 +1,7 @@
 ---
 Status: Active
-Version: 1.2
-Last Updated: 2026-09-23
+Version: 1.3
+Last Updated: 2026-11-12
 Source of Truth: DECISIONS.md
 ---
 
@@ -164,3 +164,28 @@ Source of Truth: DECISIONS.md
     3. **Run-Scoped Comparability Enforcement**: Capability history records are strictly partitioned by target identifier (`target_id`). Plotted time-series data points represent sequential discrete run snapshots, explicitly labeled with an amber comparability banner to prevent misleading cross-repository aggregation assumptions.
     4. **Accessibility Fallback**: The SkillGraph view provides a view mode toggle offering an accessible tabular list view of nodes and relationships alongside the graphical canvas for keyboard and screen-reader accessibility.
 *   **Why This Decision**: Avoids building fragile custom force-directed canvas logic from scratch while guaranteeing 100% compatibility with React 19 and Next.js 16 Turbopack.
+
+## ADR-018: PostgreSQL-Native Queue over Redis for Analysis Jobs
+*   **Date**: 2026-10-21
+*   **Status**: ACTIVE
+*   **Title**: Use PostgreSQL `analysis_jobs` Table with `FOR UPDATE SKIP LOCKED` Instead of Redis
+*   **Context**: The initial architecture specification listed Redis as the message queue broker for background analysis jobs. During Step 6B and Step 8 audits, the trade-off of maintaining an external Redis broker versus leveraging PostgreSQL-native transactional queuing was evaluated.
+*   **Decisions**:
+    1. Manage job queuing directly in PostgreSQL using `SELECT ... FROM analysis_jobs WHERE status = 'QUEUED' ORDER BY requested_at ASC FOR UPDATE SKIP LOCKED LIMIT 1`.
+    2. Maintain `attempt_count` and bounded retries (`MAX_JOB_ATTEMPTS = 3`) within the database row.
+    3. Remove Redis from the active runtime dependencies for the Minor MVP.
+*   **Alternatives Considered**: Redis + Celery / RQ.
+*   **Why This Decision**: Eliminates an additional stateful infrastructure dependency (Redis) for local development and self-contained deployments, guarantees ACID transactional consistency between job status and analysis run artifacts, prevents orphaned jobs on database rollbacks, and easily handles the throughput requirements of the Minor MVP.
+
+## ADR-019: Supabase Session Integration and In-App Authentication Modal
+*   **Date**: 2026-10-28
+*   **Status**: ACTIVE
+*   **Title**: Integrated `@supabase/supabase-js` Auth with Tabbed Modal and Dev-Token Fallback
+*   **Context**: Early frontend prototypes relied on browser `window.prompt()` and unverified `sessionStorage` developer tokens. A secure, production-ready authentication flow was needed that supports real Supabase Auth sessions while allowing seamless local offline development.
+*   **Decisions**:
+    1. Integrate `@supabase/supabase-js` v2 in `frontend/src/lib/supabase.ts` and `frontend/src/lib/auth-context.tsx`.
+    2. Provide an in-app `<AuthModal />` with Sign In and Sign Up tabs, client-side validation, error banners, and email confirmation notices.
+    3. Auto-sync session tokens from `supabase.auth.onAuthStateChange` into the `ApiClient`.
+    4. Auto-provision developer profiles upon first login (`GET /developers/me` returning 404 triggers `POST /developers/me`).
+    5. Support a graceful developer fallback: when Supabase environment variables are unconfigured, `isSupabaseConfigured()` returns false, prompting a manual dev-token input textarea so that developers can test backend APIs without requiring an external Supabase Auth project.
+*   **Why This Decision**: Delivers an authentic user authentication experience matching production requirements without breaking offline test suites or local decoupled development.

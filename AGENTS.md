@@ -1,7 +1,7 @@
 ---
 Status: Active
-Version: 1.1
-Last Updated: 2026-09-08
+Version: 2.0
+Last Updated: 2026-11-12
 Source of Truth: AGENTS.md
 ---
 
@@ -11,8 +11,8 @@ Source of Truth: AGENTS.md
 DevTwin is an AI-powered Developer Capability Intelligence Platform. It maintains an evolving representation of a developer's capabilities based on evidence extracted from repositories.
 
 ## Current Development Stage
-**Implementation-Ready System Specification.**
-*Note: Do NOT claim features, APIs, migrations, or application code are implemented. The project currently exists purely as a set of rigorous architectural and domain specifications.*
+**Full-Stack MVP Implemented & Live-Verified (v0.8 / Checkpoint 31).**
+*Note: Backend API, database migrations, asynchronous worker pipeline (all 8 stages), Supabase auth session integration, GitHub App connection, and interactive Next.js dashboard are fully implemented and verified with 385 backend tests and 64 frontend tests passing. Adhere strictly to the documented domain models, contracts, and RLS policies when extending the platform.*
 
 ## Source-of-Truth Hierarchy
 The system enforces strict document boundaries. No document should claim universal authority over unrelated layers.
@@ -29,20 +29,20 @@ The system enforces strict document boundaries. No document should claim univers
 
 ## Repository Structure
 *   `docs/` - Canonical technical specifications.
-*   `backend/` - (Pending) FastAPI backend services.
-*   `frontend/` - (Pending) Next.js frontend application.
-*   `workers/` - (Pending) Background Python analysis workers.
-*   `database/` - (Pending) SQL migrations.
-*   `scripts/`, `tests/` - (Pending) Utilities and test suites.
+*   `backend/` - FastAPI backend services, REST APIs, and JWKS authentication.
+*   `frontend/` - Next.js 16 (App Router, Turbopack, Tailwind CSS v4, Cytoscape, Recharts) application.
+*   `workers/` - Background Python analysis workers (`workers/runner.py`) executing the 8-stage pipeline.
+*   `database/` - SQL migrations (001-005) for PostgreSQL/Supabase with RLS.
+*   `scripts/`, `tests/` - Utilities and end-to-end integration test suites.
 
 ## Identity & Mapping Rules
 *   **Developer Identity Mapping**: We strictly map: `Supabase auth.users.id -> developers.auth_user_id`. `developers.id` remains a unique internal UUID. Do NOT force `developers.id = auth.uid()`. GitHub IDs remain purely external identifiers.
 
 ## Technology Stack (Approved)
-*   **Frontend**: Next.js, TypeScript, Tailwind CSS.
-*   **Backend**: FastAPI, Python.
-*   **Database**: PostgreSQL / Supabase.
-*   **Queue**: Redis.
+*   **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS v4, Cytoscape, Recharts, Lucide React.
+*   **Backend**: FastAPI, Python 3.11/3.12, SQLAlchemy, Pydantic v2, PyJWT (JWKS), Cryptography (Fernet).
+*   **Database**: PostgreSQL / Supabase (27 tables with Row-Level Security).
+*   **Queue**: PostgreSQL-native (`analysis_jobs` table using `SELECT ... FOR UPDATE SKIP LOCKED` polling, NOT Redis).
 
 ## Development Workflow
 When an agent is invoked:

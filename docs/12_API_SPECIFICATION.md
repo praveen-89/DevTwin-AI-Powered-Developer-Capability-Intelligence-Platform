@@ -1,5 +1,12 @@
 # 12. API Specification (Data Contracts)
 
+---
+Status: Active
+Version: 2.0
+Last Updated: 2026-11-12
+Source of Truth: docs/12_API_SPECIFICATION.md
+---
+
 *Source of Truth Context: This document defines external/backend contracts for FastAPI.*
 
 ## Core Principles
@@ -53,9 +60,10 @@
 *   **Purpose**: Remove/inactivate the active GitHub connection (does NOT delete historical DevTwin analysis data).
 *   **Response**: 204 No Content
 
-**`GET /github/repositories`** *(NOT IMPLEMENTED — Future Phase)*
-*   **Purpose**: List repositories accessible via the GitHub App installation using an on-demand Installation Access Token.
-*   **Response**: 200 OK, array of repository objects
+**`GET /github/repositories`**
+*   **Purpose**: List repositories accessible via the GitHub App installation using an on-demand ephemeral Installation Access Token. Paginates to max 10 pages, 100 repos per page.
+*   **Authentication**: Required (Current Developer).
+*   **Response**: `200 OK`, array of repository items (`github_repo_id`, `name`, `full_name`, `is_private`, `default_branch`, `html_url`, `description`). Returns `400 Bad Request` if GitHub is disconnected or installation is missing.
 
 ### 3. Repositories
 

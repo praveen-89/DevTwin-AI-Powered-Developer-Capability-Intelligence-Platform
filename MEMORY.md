@@ -1,7 +1,7 @@
 ---
 Status: Active
-Version: 2.4
-Last Updated: 2026-10-28
+Version: 2.5
+Last Updated: 2026-11-12
 Source of Truth: MEMORY.md
 ---
 
@@ -26,7 +26,7 @@ Start command: `backend\.venv\Scripts\python.exe -m uvicorn app.main:app --host 
 Worker start commands:
 - From root: `backend\.venv\Scripts\python.exe workers\runner.py --poll` (or `--once`)
 - From backend: `cd backend; .venv\Scripts\python.exe -m app.workers.runner --poll` (or `--once`)
-**Test Suite: 385 tests passing** (verified 2026-10-28 — Checkpoint 31 re-verified)
+**Test Suite: 385 tests passing** (verified 2026-11-12 — Checkpoint 31 re-verified)
 
 #### Completed Backend Steps
 - Steps 1–4A: Project foundation, DB schema, domain model, migrations

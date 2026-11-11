@@ -1,7 +1,7 @@
 ---
 Status: Active
-Version: 1.4
-Last Updated: 2026-10-26
+Version: 1.5
+Last Updated: 2026-11-12
 Source of Truth: TESTING.md
 ---
 
@@ -16,7 +16,7 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 `Unit -> Integration -> System -> End-to-End`
 
 ## Backend Testing
-*   **Current Status**: `pytest -q` -> 385 passed, 15 pre-existing mock warnings (Checkpoint 25, 2026-10-26).
+*   **Current Status**: `pytest -q` -> 385 passed, 15 pre-existing mock warnings (Checkpoint 31 verified).
 *   **Scope**: Covers foundation, health checks, configuration, developer registration, projects, repositories (registration, listing, retrieval), GitHub connection/disconnect flows, analysis pipeline job submission/polling (`test_analysis.py`), worker runner queue claiming, attempt tracking, safe repository extraction, isolated temporary workspace lifecycle, non-terminal `CAPABILITY`/`PROCESSING` lifecycle state, repeated-invocation safety, error sanitization (`test_worker.py`), repository mining file-tree traversal, exclusions, language classification, defensive manifest extraction (`package.json`, `requirements.txt`, `Cargo.toml`), Python AST parsing, archive streaming/extraction limits (`test_mining.py`), SkillGraph deterministic entity and taxonomy mapping, AST concept extraction, provenance-backed observations, deduplication, snapshot persistence (`test_skillgraph.py`), CodeRisk static risk analysis rules, secret redaction, safe AST detection for subprocess with shell=True, run-scoped idempotency without observation orphaning, snapshot persistence, and worker lifecycle integration (`test_coderisk.py`), Evidence Generation observation contextualization, reliability/strength/polarity assignment, taxonomy junction linking, idempotency, and rollback handling (`test_evidence.py`), Capability Scoring Engine deterministic mathematical aggregation, fine-grained evidence strength preservation, diminishing returns, temporal half-life decay, uncertainty-aware confidence calculation, exclusive-arc validation, run-scoped idempotency, and history append logging (`test_capability.py`), and RLS NULL ownership regression guards.
 *   **API Tests**: Validate REST endpoints, payload shapes, ownership isolation, and HTTP status codes using FastAPI test clients.
 *   **Worker & Fetcher Tests**: Validate atomic queue claiming (`FOR UPDATE SKIP LOCKED`), maximum attempt bounding (`MAX_JOB_ATTEMPTS = 3`), terminal Stage 8 completion lifecycle (both `run.status == "COMPLETED"` and `job.status == "COMPLETED"` with populated `completed_at`), idempotency guard for already-COMPLETED jobs, repeated-invocation safety, Zip Slip / path traversal protection, corrupt archive recovery, ephemeral token cleanup, and sanitized error mapping.
@@ -61,13 +61,13 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 ## Database Testing
 *   **Constraints**: Attempt to insert invalid data (e.g., polymorphic violation in Exclusive Arcs) to ensure `CHECK` constraints trigger.
 *   **RLS Security Regression**: Static security regression test to prevent RLS ownership bypasses (e.g., missing project_id).
-*   **RLS Integration**: (Future hardening) Runtime database-level RLS integration test to authenticate as Developer A and attempt to query Developer B's data.
+*   **RLS Integration**: Runtime database-level RLS integration test to authenticate as Developer A and attempt to query Developer B's data.
 
 ## Frontend Testing
-*   **Unit Tests (`vitest run`)**: 62 passed across 7 suites (Checkpoint 25):
+*   **Unit Tests (`vitest run`)**: 64 passed across 7 suites (Checkpoint 31 verified):
     *   `skillgraph-canvas.test.ts`: 24 tests covering node/edge filtering, search, incident connectivity, and taxonomy colors.
     *   `capability-history-chart.test.ts`: 12 tests covering chronological sorting, Recharts data mapping, and rounding.
-    *   `add-repository-dialog.test.tsx`: 6 tests covering project/repo loading, search filter, create project mode, successful registration, error handling, and 409 conflict.
+    *   `add-repository-dialog.test.tsx`: 8 tests covering project/repo loading, search filter, create project mode, successful registration, error handling, and 409 conflict.
     *   `auth-modal.test.tsx`: 9 tests covering modal open/close, Sign In / Sign Up tab switching, field validation, successful sign-in, error display, email confirmation notice, unconfigured fallback, and production mode safety guard.
     *   `auth-context.test.tsx`: 5 tests covering Supabase session restoration on mount, 404 developer auto-provisioning, `signIn` token synchronization, `signOut` clearing, and graceful unconfigured-Supabase fallback with dev-token.
     *   `overview-callback.test.tsx`: 3 tests covering `?github=success` success banner, `?github_error=access_denied` error banner, and banner dismiss + URL sanitization.
@@ -86,6 +86,17 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 *   **Skipped Suites (26 tests)**:
     *   Live authenticated tests requiring `DEVTWIN_DEV_TOKEN` against a running backend (`auth.spec.ts`: 3, `repositories.spec.ts`: 3, `analysis.spec.ts`: 4, `capabilities.spec.ts`: 7, `skillgraph.spec.ts`: 9). Safely skipped to prevent false negatives when live credentials are absent.
     *   Live analysis job execution guarded by `DEVTWIN_ALLOW_LIVE_ANALYSIS=true` to prevent destructive or expensive repository analysis runs.
+
+## End-to-End Analysis Pipeline Verification (Checkpoint 31)
+*   **Verified Run ID**: `3bfc7727-8c19-46da-9490-5faf245e4940` (Execution time ~20s).
+*   **Verified Progression**: Complete transition through all 8 stages (`QUEUED → FETCHING → MINING → SKILL_GRAPH → CODE_RISK → EVIDENCE → CAPABILITY → COMPLETED`).
+*   **Verified Artifacts**:
+    *   86 observations (AST classes, async functions, modules, languages, dependencies)
+    *   35 evidence items with taxonomy junctions (`evidence_skills`, `evidence_technologies`, `evidence_concepts`)
+    *   38 developer capabilities updated with append-only `capability_history` records
+    *   1 CodeRisk finding paired with `RISK_OBSERVED` observation
+    *   4 skill nodes in repository SkillGraph
+*   **Verified Frontend Display**: All 6 pages rendered verified live data with 0 errors.
 
 ## Regression Testing
 Every bug fix involving data extraction, capability scoring, or UI rendering must have a regression test added.
