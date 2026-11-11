@@ -200,13 +200,20 @@ def map_mining_result_to_graph(
                 concepts_dict["Code Documentation"] = ConceptData(name="Code Documentation")
 
         for imp in ast_file.imports:
+            # Plain `import X` statements carry the imported module in `names`,
+            # not `module` (ast.Import has no `module` attribute, unlike
+            # ast.ImportFrom) — fall back to the first name so downstream
+            # evidence mapping never receives a null module reference.
+            effective_module = imp.module or (imp.names[0] if imp.names else None)
+            if not effective_module:
+                continue
             observations.append(
                 ObservationData(
                     type="MODULE_IMPORTED",
                     source_tool="ast-parser",
                     source_reference={
                         "file": ast_file.file_path,
-                        "module": imp.module,
+                        "module": effective_module,
                         "names": imp.names,
                         "is_from": imp.is_from,
                         "line": imp.line_number,

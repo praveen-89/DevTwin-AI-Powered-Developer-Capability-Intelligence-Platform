@@ -1,0 +1,16 @@
+{
+  "full_name": "praveen-89/DevTwin-AI-Powered-Developer-Capability-Intelligence-Platform",
+  "repository_id": "d8db549a-f818-49f7-b240-20305ae8af09",
+  "github_repo_id": null,
+  "job_id": "23f8a208-8e62-4bdf-9e42-f798e0fe7928",
+  "run_id": "aa434657-f902-47df-91a5-948cb0a07f6c",
+  "run_status": "COMPLETED",
+  "reused_existing_run": false,
+  "wall_clock_seconds": 54.72,
+  "observation_count": 1787,
+  "evidence_count": 1782,
+  "capability_count": 122,
+  "risk_finding_count": 13,
+  "error": null,
+  "evaluated_at": "2026-11-11T22:55:46.396253+00:00"
+}

@@ -134,6 +134,48 @@ The queue is PostgreSQL-native (using `analysis_jobs` table + polling), NOT Redi
 - Test baselines: 385 backend tests passing, 64 frontend tests passing, 0 TypeScript errors
 - Note: 4 orphaned runs stuck at CODE_RISK from earlier interrupted sessions — non-blocking
 
+### Checkpoint 32 — Phase 14 Evaluation Harness Built & Live-Executed, n=1 (2026-11-12)
+- Built: `scripts/evaluation/dataset.md` (repo set + hand-written ground
+  truth for this repository; 8 remaining slots pending GitHub App
+  installation scope), `scripts/evaluation/run_evaluation.py` (drives the
+  real pipeline via `GET /github/repositories` → `POST /projects` →
+  `POST /repositories` → `POST /analysis/jobs`, per ADR-007 — no
+  clone/public-URL shortcut), and `scripts/evaluation/compute_metrics.py`
+  (reads persisted DB state for extraction precision/recall, provenance
+  traceability %, CodeRisk rule/severity breakdown, runtime distribution,
+  naive baseline). 9 hermetic unit tests in
+  `scripts/evaluation/tests/test_compute_metrics.py`, all passing.
+- **Live sweep executed** against the local backend + worker + Supabase
+  Postgres for Repo 1 (this repository). Run `aa434657-f902-47df-91a5-948cb0a07f6c`
+  reached COMPLETED in 47.64s. Measured results: extraction precision
+  0.2391 / recall 0.9167 (low precision explained by an under-enumerated
+  ground-truth list, not a pipeline defect — see results doc), 100%
+  provenance traceability (122/122 capability rows), CodeRisk: 5 SEC-001
+  HIGH + 2 REL-002 MEDIUM + 6 LOW findings (all 5 HIGH findings manually
+  reviewed and confirmed false positives — mock tokens in test fixtures),
+  capability score distribution max 0.99 / median 0.5395 / 6 of 122
+  (4.9%) at or above 0.95. Full writeup: `docs/14_PHASE14_EVALUATION_RESULTS.md`.
+- **Real bug found and fixed during this evaluation** (two earlier live
+  attempts got permanently stuck at `status="CODE_RISK"` with no error
+  recorded): `backend/app/skillgraph/mapper.py` persisted
+  `MODULE_IMPORTED` observations with `source_reference["module"] = None`
+  for plain `import X` statements (`ast.Import` has no `module` attribute
+  — only `ast.ImportFrom` does), which then crashed
+  `backend/app/evidence/mapper.py:98`'s `ref.get("module", "").strip()`
+  (the `.get()` default doesn't apply when the key exists with value
+  `None`). Fixed by falling back to the first entry in `names` as the
+  effective module in `skillgraph/mapper.py`, skipping the observation if
+  still unavailable. `evidence/mapper.py`, `capability/scorer.py`,
+  `capability/service.py`, `skillgraph/taxonomy.py`, and
+  `coderisk/rules.py` were NOT modified. All 385 pre-existing backend
+  tests still pass after the fix.
+- **Still open**: Repos 2–9 in `dataset.md` remain `<PENDING SELECTION>` —
+  need the developer to extend the GitHub App installation and pick real
+  repos before the 8–12 repo sample-size target is met.
+- Results land in `scripts/evaluation/results/` (currently untracked by
+  `.gitignore` — flagged for the developer to decide whether to ignore
+  it; not decided unilaterally here).
+
 ## Forbidden Behaviors
 Agents must NOT:
 - Invent requirements

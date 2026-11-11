@@ -123,7 +123,33 @@ PHASE 14 [Research Evaluation & Benchmarks] -> ACTIVE / NEXT
 
 ---
 
-### PHASE 14 — Research Evaluation (ACTIVE / NEXT)
+### PHASE 14 — Research Evaluation (LIVE RUN EXECUTED — n=1 of 9 target repos)
 - Curated evaluation dataset of open-source repositories representing varied expertise levels.
 - Quantitative verification of provenance traceability (100% target).
 - CodeRisk false positive rate assessment and capability heuristic validation.
+- **Harness built and live-executed against 1 real repository** (2026-11-12):
+  `scripts/evaluation/dataset.md`, `scripts/evaluation/run_evaluation.py`,
+  `scripts/evaluation/compute_metrics.py`, and
+  `scripts/evaluation/tests/test_compute_metrics.py` (9 hermetic unit tests,
+  all passing) are implemented. A real sweep was run against the live
+  backend + worker + Supabase Postgres for Repo 1 (this repository,
+  run `aa434657-f902-47df-91a5-948cb0a07f6c`), producing measured
+  precision/recall (0.2391 / 0.9167), 100% provenance traceability (122/122
+  rows), a manually-reviewed CodeRisk finding breakdown (all 5 SEC-001 HIGH
+  findings confirmed false positives in test fixtures), a runtime of 47.64s,
+  and a measured capability score distribution (max 0.99, 6/122 ≥0.95).
+  Full writeup: `docs/14_PHASE14_EVALUATION_RESULTS.md`.
+- **Bug found and fixed during this evaluation**: `backend/app/skillgraph/mapper.py`
+  persisted `MODULE_IMPORTED` observations with `source_reference["module"] = None`
+  for plain `import X` statements, which crashed `evidence/mapper.py` and
+  permanently stuck analysis runs at `status="CODE_RISK"`. Fixed by falling
+  back to the imported name from `names` when `module` is `None`. All 385
+  pre-existing backend tests still pass. `evidence/mapper.py`,
+  `capability/scorer.py`, `capability/service.py`, `skillgraph/taxonomy.py`,
+  and `coderisk/rules.py` were NOT modified.
+- **Still open**: Repos 2–9 in `dataset.md` remain `<PENDING SELECTION>` —
+  the developer needs to extend the GitHub App installation and pick real
+  repositories (small/mid/OSS mix) before the 8–12 repo sample-size target
+  is met. Do NOT mark this phase fully COMPLETED until that larger sweep
+  runs and `docs/14_PHASE14_EVALUATION_RESULTS.md` is extended with n>1
+  results.
