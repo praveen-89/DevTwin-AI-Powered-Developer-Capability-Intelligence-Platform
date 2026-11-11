@@ -43,12 +43,21 @@ export async function clearAuthState(page: Page): Promise<void> {
 // ── Navigation ────────────────────────────────────────────────────────────────
 
 export const ROUTES = {
-  home: "/",
+  // "home" is the authenticated Overview dashboard (moved from "/" to
+  // "/dashboard" when the public marketing site took over "/" — see
+  // src/app/(marketing)/page.tsx and src/app/(app)/dashboard/page.tsx).
+  home: "/dashboard",
   repositories: "/repositories",
   capabilities: "/capabilities",
   skillgraph: "/skillgraph",
   coderisk: "/coderisk",
   evidence: "/evidence",
+  // Public marketing + auth routes.
+  landing: "/",
+  howItWorks: "/how-it-works",
+  about: "/about",
+  login: "/login",
+  signup: "/signup",
 } as const;
 
 /** Navigate to a route and wait for the network to settle. */

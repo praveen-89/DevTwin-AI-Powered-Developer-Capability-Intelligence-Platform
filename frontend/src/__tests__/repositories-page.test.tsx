@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import RepositoriesPage from "@/app/repositories/page";
+import RepositoriesPage from "@/app/(app)/repositories/page";
 import { apiClient, ApiError } from "@/lib/api-client";
 import * as authModule from "@/lib/auth-context";
 import type { RepositoryResponse, AnalysisJobResponse, AnalysisRunResponse } from "@/types/api";
@@ -40,6 +40,7 @@ describe("RepositoriesPage", () => {
     setToken: vi.fn(),
     clearToken: vi.fn(),
     signIn: vi.fn(),
+    signInWithGithub: vi.fn(),
     signUp: vi.fn(),
     signOut: vi.fn(),
     refreshDeveloper: vi.fn(),

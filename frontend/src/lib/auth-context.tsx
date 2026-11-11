@@ -43,6 +43,13 @@ export interface AuthState {
     error: string | null;
     emailConfirmationRequired: boolean;
   }>;
+  /**
+   * Start the Supabase GitHub OAuth flow. Redirects the browser away from
+   * the app, so a non-null return value only ever represents a failure to
+   * *start* the redirect (e.g. provider not enabled, network error) — a
+   * successful call never resolves because the browser navigates away.
+   */
+  signInWithGithub: (redirectTo?: string) => Promise<{ error: string | null }>;
   /** Sign out of Supabase and clear session state */
   signOut: () => Promise<void>;
   /** Re-fetch the developer profile */
@@ -310,6 +317,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase]
   );
 
+  // Sign In via Supabase GitHub OAuth (PKCE redirect flow)
+  const signInWithGithub = useCallback(
+    async (redirectTo?: string): Promise<{ error: string | null }> => {
+      if (!supabase) {
+        const msg = "Supabase authentication is not configured. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.";
+        setError(msg);
+        return { error: msg };
+      }
+
+      setError(null);
+
+      try {
+        const { error: sbError } = await supabase.auth.signInWithOAuth({
+          provider: "github",
+          options: {
+            redirectTo:
+              redirectTo ??
+              (typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined),
+          },
+        });
+
+        if (sbError) {
+          setError(sbError.message);
+          return { error: sbError.message };
+        }
+
+        // On success, Supabase redirects the browser to GitHub — this
+        // function does not resolve meaningfully beyond this point.
+        return { error: null };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to start GitHub sign-in.";
+        setError(msg);
+        return { error: msg };
+      }
+    },
+    [supabase]
+  );
+
   // Sign Out
   const signOut = useCallback(async () => {
     setLoading(true);
@@ -362,6 +407,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearToken,
         signIn,
         signUp,
+        signInWithGithub,
         signOut,
         refreshDeveloper,
       }}

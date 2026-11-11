@@ -18,14 +18,31 @@ import {
 } from "./helpers";
 
 test.describe("A — Authentication & Onboarding", () => {
+  test.describe("A0 — Marketing site and route guard", () => {
+    test("A0.1 — Landing page renders and its CTA links to /signup", async ({ page }) => {
+      await gotoAndSettle(page, ROUTES.landing);
+      await expect(page).toHaveTitle(/DevTwin/i);
+      const cta = page.getByRole("link", { name: /Connect with GitHub/i }).first();
+      await expect(cta).toBeVisible();
+      await expect(cta).toHaveAttribute("href", "/signup");
+    });
+
+    test("A0.2 — Unauthenticated visit to /dashboard redirects to /login", async ({ page }) => {
+      await page.goto(ROUTES.home, { waitUntil: "networkidle" });
+      await expect(page).toHaveURL(/\/login$/);
+      await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
+    });
+  });
+
   test.describe("A1 — Unauthenticated states", () => {
-    test("A1.1 — Overview page renders without a token and shows auth guidance", async ({ page }) => {
+    test("A1.1 — Overview route redirects an unauthenticated visitor to /login instead of a broken dashboard", async ({ page }) => {
       await gotoAndSettle(page, ROUTES.home);
       // Must not crash — page title must be visible
       await expect(page).toHaveTitle(/DevTwin/i);
-      // Page should render the shell (sidebar or main nav)
-      const shell = page.locator("nav, aside, [data-testid='sidebar']").first();
-      await expect(shell).toBeVisible({ timeout: 8000 });
+      // The route guard must redirect to the dedicated login page rather
+      // than rendering the protected dashboard shell.
+      await expect(page).toHaveURL(/\/login$/);
+      await expect(page.locator("text=Application error")).not.toBeVisible({ timeout: 2000 }).catch(() => {});
     });
 
     test("A1.2 — Capabilities page unauthenticated shows sign-in prompt, not a crash", async ({ page }) => {

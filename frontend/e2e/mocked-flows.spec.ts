@@ -322,8 +322,16 @@ test.describe("M — Mocked Authenticated User Flows (End-to-End Simulation)", (
     await expect(page.locator("text=Application error")).not.toBeVisible();
   });
 
-  test("M2 — Authenticated Navigation across all six routes without crash", async ({ page }) => {
-    for (const path of Object.values(ROUTES)) {
+  test("M2 — Authenticated Navigation across all six dashboard routes without crash", async ({ page }) => {
+    const dashboardRoutes = [
+      ROUTES.home,
+      ROUTES.repositories,
+      ROUTES.capabilities,
+      ROUTES.skillgraph,
+      ROUTES.coderisk,
+      ROUTES.evidence,
+    ];
+    for (const path of dashboardRoutes) {
       await page.goto(path);
       await page.waitForTimeout(300);
       await expect(page.locator("body")).toBeVisible();

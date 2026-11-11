@@ -176,6 +176,70 @@ The queue is PostgreSQL-native (using `analysis_jobs` table + polling), NOT Redi
   `.gitignore` — flagged for the developer to decide whether to ignore
   it; not decided unilaterally here).
 
+### Checkpoint 33 — Marketing Site + GitHub OAuth Login/Signup (2026-11-12)
+
+- **What changed**: Added a public marketing site (`src/app/(marketing)/`:
+  `/`, `/how-it-works`, `/about`) and dedicated `/login` + `/signup` routes
+  (one shared `AuthPage` component, two URLs) that call Supabase's
+  `signInWithOAuth({ provider: "github" })` via the *existing* Supabase
+  client singleton (`src/lib/supabase.ts` — not a second instance). A
+  visibly disabled "Continue with Google" button is stubbed for later; it
+  is not wired to real Google OAuth. Added `/auth/callback` to land the
+  OAuth redirect, wait for `AuthProvider` to pick up the new session
+  (unchanged `POST /developers/me` provisioning path), and redirect to
+  `/dashboard`, or back to `/login` with a visible error on denial/timeout.
+- **Route restructuring**: The Overview dashboard moved from `/` to
+  `/dashboard` (route group `src/app/(app)/`) because `/` is now the
+  marketing landing page. `/repositories`, `/capabilities`, `/coderisk`,
+  `/skillgraph`, `/evidence` keep their URLs, just regrouped under
+  `(app)`. A new client-side guard (`src/app/(app)/layout.tsx`) redirects
+  an unauthenticated visitor to `/login` instead of rendering the
+  protected shell — this did not exist before this checkpoint (previously
+  any visitor could view the dashboard pages unauthenticated and just see
+  empty/error states).
+- **Why client-side, not middleware**: Supabase's browser client persists
+  the session in `localStorage` (`persistSession: true`), not a cookie, so
+  there is no session state available to Next.js middleware without
+  introducing `@supabase/ssr` — out of scope for this change. The guard
+  lives in `useAuth()` + a client layout instead.
+- **Existing `AuthModal` (email/password + dev-token fallback) was left
+  untouched** — it still backs the Header's "Sign in" button for local
+  dev convenience, but is effectively unreachable on protected routes now
+  that the guard redirects before Header renders for an unauthenticated
+  visitor.
+- **Motion**: `npm install motion` (new dependency) for hero entrance,
+  staggered scroll reveals (`Reveal`), and an animated pipeline step
+  sequence (`PipelineSequence`, `layoutId` + `AnimatePresence`). All three
+  respect `prefers-reduced-motion` via Motion's `useReducedMotion()`.
+- **Next.js 16 Cache Components pitfalls hit during this work** (see
+  `frontend/AGENTS.md` — this version has breaking changes from training
+  data): (1) `new Date()` in a server-rendered footer broke prerendering —
+  fixed with a static year; (2) passing an array of Lucide icon
+  *component references* as a prop from a Server Component (`page.tsx`,
+  which exports `metadata`) into a Client Component failed RSC
+  serialization — fixed by moving that data into a client-only wrapper
+  (`LandingPipeline`); (3) `useSearchParams()` in `/login`, `/signup`, and
+  `/auth/callback` required an explicit `<Suspense>` boundary.
+- **Tests updated to match the new, intentional behavior change**:
+  `frontend/e2e/helpers.ts` — `ROUTES.home` now points at `/dashboard`
+  (was `/`); `frontend/e2e/auth.spec.ts` A1.1 now asserts the
+  unauthenticated-redirect-to-`/login` behavior instead of asserting the
+  dashboard shell rendered unauthenticated (which is no longer true, by
+  design); new A0.1/A0.2 cover the landing CTA and the dashboard redirect
+  per this task's explicit testing requirement. All other existing
+  Vitest/Playwright tests were re-verified passing, not rewritten.
+- **Verified**: `tsc --noEmit` clean; `next build` succeeds (all 13
+  routes prerender); Vitest 72/72 passing (64 pre-existing + 8 new in
+  `auth-page.test.tsx`); Playwright — all 23 unauthenticated-reachable
+  tests pass against a live `next dev` server, 26 authenticated tests
+  skipped as before (no `DEVTWIN_DEV_TOKEN` in this environment — not a
+  behavior change).
+- **Not done / explicitly deferred**: Enabling the Supabase GitHub OAuth
+  provider itself is a manual Supabase console step (Authentication →
+  Providers → GitHub, with a dedicated GitHub OAuth App distinct from the
+  GitHub App used for repository access) — flagged to the developer, not
+  attempted from code. Real Google OAuth remains unimplemented by design.
+
 ## Forbidden Behaviors
 Agents must NOT:
 - Invent requirements
@@ -186,18 +250,26 @@ Agents must NOT:
 - Claim implementation when only specification exists
 
 ## Known Limitations (Minor MVP)
-- Supabase Auth UI is now implemented with email/password sign-in and sign-up via `@supabase/supabase-js` v2
-- When Supabase env vars are absent, the UI falls back gracefully to a dev-token textarea form
+- Supabase Auth UI now covers three paths: the original in-app `AuthModal`
+  (email/password sign-in/sign-up), and dedicated `/login` + `/signup`
+  pages whose primary action is GitHub OAuth (`signInWithOAuth`) — both
+  reuse the same Supabase client singleton
+- The Supabase GitHub provider itself still needs to be enabled in the
+  Supabase console (manual step, not done from code) before GitHub
+  sign-in actually completes end-to-end
+- Google sign-in is a visibly disabled "Coming soon" stub on `/login` and
+  `/signup` — not wired to a real provider
+- When Supabase env vars are absent, the UI falls back gracefully to a dev-token textarea form (both in `AuthModal` and on `/login` / `/signup`)
 - Worker process is operational and verified end-to-end; can be executed via daemon polling loop (`workers\runner.py --poll`)
 - No email/notification on analysis completion
 - No multi-developer team features
 
 ## Current Technology Stack
-- Frontend: Next.js / TypeScript / Tailwind CSS v4
+- Frontend: Next.js / TypeScript / Tailwind CSS v4 / Motion (`motion/react`, for marketing-site animation only)
 - Backend: FastAPI / Python
 - Database: PostgreSQL / Supabase (27 tables with RLS)
 - Queue: PostgreSQL-native (NOT Redis)
-- Testing: pytest (backend), Vitest (frontend — 64 tests), Playwright (E2E)
+- Testing: pytest (backend), Vitest (frontend — 72 tests), Playwright (E2E)
 
 ## Project Concepts Reference
 - **Skill ≠ Capability**: "Backend Development" is a Skill. A developer's "Capability in Backend Development" is a scored metric.

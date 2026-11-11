@@ -64,6 +64,31 @@ The Major roadmap will extend the platform to include the StudyTwin layer, featu
 - `scripts/` - Operational scripts and database utilities
 - `tests/` - System and end-to-end integration tests
 
+## Frontend Routes
+The frontend is split into a public marketing site and an authenticated app, as two
+separate Next.js route groups that share no layout:
+- **Public (marketing)** — `src/app/(marketing)/`: `/` (landing), `/how-it-works`
+  (expanded pipeline breakdown), `/about` (project context).
+- **Auth** — `/login`, `/signup` (one shared component, two URLs; GitHub OAuth
+  primary, Google sign-in visibly disabled as a future stub), `/auth/callback`
+  (OAuth redirect landing).
+- **Authenticated app** — `src/app/(app)/`: `/dashboard` (Overview, formerly at
+  `/`), `/repositories`, `/capabilities`, `/coderisk`, `/skillgraph`, `/evidence`.
+  A client-side route guard (`src/app/(app)/layout.tsx`) redirects an
+  unauthenticated visitor to `/login` instead of rendering a broken dashboard.
+
+### Deployment prerequisite: Supabase GitHub provider
+"Continue with GitHub" calls Supabase's `signInWithOAuth({ provider: "github" })`
+using the existing `@supabase/supabase-js` client (`frontend/src/lib/supabase.ts`).
+Before this works end-to-end, the project owner must, in the Supabase dashboard:
+1. Go to **Authentication → Providers → GitHub** and enable it.
+2. Create a dedicated **GitHub OAuth App** (not the GitHub App used for
+   repository access/installation — a separate app, scoped only to sign-in)
+   and supply its Client ID/Secret to the Supabase provider config.
+3. Set that OAuth App's **Authorization callback URL** to the Supabase
+   project's callback endpoint (`https://<project-ref>.supabase.co/auth/v1/callback`).
+This is a manual console step — it is not configured from application code.
+
 ## Development Philosophy
 - The repository documentation is the source of truth.
 - AI is an intelligence layer, NOT the entire product.

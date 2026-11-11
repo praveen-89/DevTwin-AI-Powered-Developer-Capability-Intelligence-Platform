@@ -24,7 +24,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Overview", icon: LayoutDashboard, functional: true },
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, functional: true },
   { href: "/repositories", label: "Repositories", icon: Server, functional: true },
   { href: "/capabilities", label: "Capabilities", icon: BarChart3, functional: true },
   { href: "/coderisk", label: "CodeRisk", icon: Code2, functional: true },
@@ -116,8 +116,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
         {NAV_ITEMS.map((item) => {
-          const isActive =
-            item.href === "/" ? pathname === "/" : Boolean(pathname?.startsWith(item.href));
+          const isActive = Boolean(pathname?.startsWith(item.href));
           return (
             <NavLink key={item.href} item={item} collapsed={collapsed} isActive={isActive} />
           );
