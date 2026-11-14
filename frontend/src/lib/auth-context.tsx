@@ -26,6 +26,20 @@ export interface AuthState {
   user: User | null;
   /** Resolved developer profile — null until loaded */
   developer: DeveloperResponse | null;
+  /**
+   * Single source of truth for "is this user authenticated" — used by every
+   * auth-sensitive UI decision (the (app) route guard, the header's
+   * signed-in/signed-out display, etc). Deliberately requires BOTH a bearer
+   * token AND a backend-confirmed developer profile: a token alone can be
+   * stale, expired, or rejected by the backend, and in that case the
+   * developer profile fetch never resolves. Treating token-presence alone
+   * as "authenticated" is what previously let the (app) layout render the
+   * protected dashboard shell for a session the backend had already
+   * rejected, while the header (which already checked both) correctly
+   * showed signed-out — the two disagreed. `loading` must be checked first
+   * by consumers: this is only meaningful once `loading` is false.
+   */
+  isAuthenticated: boolean;
   /** True while the initial session/profile check or an auth action is in flight */
   loading: boolean;
   /** Non-null when auth or profile fetch has failed */
@@ -394,12 +408,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchDeveloper();
   }, [token, fetchDeveloper]);
 
+  const isAuthenticated = Boolean(token && developer);
+
   return (
     <AuthContext.Provider
       value={{
         token,
         user,
         developer,
+        isAuthenticated,
         loading,
         error,
         isConfigured,

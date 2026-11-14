@@ -63,13 +63,20 @@ By using three nullable foreign keys (`skill_id`, `technology_id`, `concept_id`)
 |---|---|---|---|---|---|
 | id | uuid | NO | uuid_generate_v4() | PK | Internal ID |
 | project_id | uuid | YES | | FK(projects.id) ON DELETE SET NULL | |
-| github_repo_id | bigint | YES | | UNIQUE | |
+| github_repo_id | bigint | YES | | UNIQUE(project_id, github_repo_id) — Migration 006 | |
 | owner_login | text | NO | | | |
 | name | text | NO | | | |
-| full_name | text | NO | | UNIQUE | |
+| full_name | text | NO | | UNIQUE(project_id, full_name) — Migration 006 | |
 | url | text | NO | | | |
 | default_branch | text | NO | 'main' | | |
 | visibility | text | NO | | | |
+
+> **Migration 006** (2026-11-13) replaced the original global `UNIQUE(github_repo_id)`
+> and `UNIQUE(full_name)` constraints with project-scoped composite constraints.
+> The original global constraints meant two different developers (or two
+> projects) could never independently register the same GitHub repository —
+> any second registration attempt incorrectly failed with
+> "Repository already registered." See ADR in DECISIONS.md.
 
 **`commits`**
 | Column | Type | Nullable | Default | Constraints | Description |

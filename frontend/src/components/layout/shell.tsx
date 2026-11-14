@@ -15,7 +15,7 @@ export function Shell({ pageTitle, children, className }: ShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#090d16]">
+    <div className="flex h-screen w-full overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#090d16] dark:text-slate-100 transition-colors">
       {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -72,9 +72,9 @@ export function PageHeading({
   return (
     <div className={cn("flex items-start justify-between gap-4", className)}>
       <div className="space-y-1">
-        <h2 className="text-lg font-bold text-slate-100 tracking-tight">{title}</h2>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">{title}</h2>
         {description && (
-          <p className="text-sm text-slate-400 leading-relaxed max-w-xl">{description}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed max-w-xl">{description}</p>
         )}
       </div>
       {actions && (

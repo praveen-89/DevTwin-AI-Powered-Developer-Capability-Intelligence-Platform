@@ -1,6 +1,22 @@
+"use client";
+
+/**
+ * DevTwin — Analysis Pipeline Stage Stepper
+ *
+ * Visualizes real async pipeline state (the actual `AnalysisRunStatus`
+ * enum from the backend — see `src/types/api.ts`). When a stage completes
+ * and the next one becomes active, the icon morphs (via AnimatePresence)
+ * rather than instantly swapping, and the connector line's fill color
+ * transitions smoothly rather than snapping.
+ *
+ * Respects `prefers-reduced-motion`: when reduced motion is requested, this
+ * renders the original static markup with no animation at all.
+ */
+
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Circle, AlertCircle, Loader2 } from "lucide-react";
 import type { AnalysisRunStatus } from "@/types/api";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 const PIPELINE_STAGES: { status: AnalysisRunStatus; label: string; description: string }[] = [
   { status: "QUEUED", label: "Queued", description: "Job accepted and waiting for a worker" },
@@ -33,11 +49,17 @@ interface StagePillProps {
   isLast: boolean;
 }
 
-function StagePill({ label, description, state, isLast }: StagePillProps) {
+const ICON_BY_STATE: Record<StagePillProps["state"], React.ReactNode> = {
+  done: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />,
+  active: <Loader2 className="h-3.5 w-3.5 text-cyan-400 animate-spin" />,
+  failed: <AlertCircle className="h-3.5 w-3.5 text-red-400" />,
+  pending: <Circle className="h-3 w-3 text-slate-600" />,
+};
+
+function StagePillStatic({ label, description, state, isLast }: StagePillProps) {
   return (
     <li className="flex-1 min-w-0">
       <div className="flex items-center gap-2">
-        {/* Icon */}
         <span
           className={cn(
             "flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full border transition-all",
@@ -48,21 +70,9 @@ function StagePill({ label, description, state, isLast }: StagePillProps) {
           )}
           aria-hidden="true"
         >
-          {state === "done" && (
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-          )}
-          {state === "active" && (
-            <Loader2 className="h-3.5 w-3.5 text-cyan-400 animate-spin" />
-          )}
-          {state === "failed" && (
-            <AlertCircle className="h-3.5 w-3.5 text-red-400" />
-          )}
-          {state === "pending" && (
-            <Circle className="h-3 w-3 text-slate-600" />
-          )}
+          {ICON_BY_STATE[state]}
         </span>
 
-        {/* Connector line */}
         {!isLast && (
           <div
             className={cn(
@@ -74,7 +84,6 @@ function StagePill({ label, description, state, isLast }: StagePillProps) {
         )}
       </div>
 
-      {/* Stage label */}
       <div className="mt-2 px-0.5">
         <p
           className={cn(
@@ -95,14 +104,98 @@ function StagePill({ label, description, state, isLast }: StagePillProps) {
   );
 }
 
+function StagePillAnimated({ label, description, state, isLast }: StagePillProps) {
+  return (
+    <li className="flex-1 min-w-0">
+      <div className="flex items-center gap-2">
+        {/* Icon — morphs via AnimatePresence rather than swapping instantly */}
+        <motion.span
+          layout
+          className={cn(
+            "relative flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full border overflow-hidden",
+            state === "done" && "bg-emerald-500/20 border-emerald-500/50",
+            state === "active" && "bg-cyan-500/20 border-cyan-500/60",
+            state === "failed" && "bg-red-500/20 border-red-500/50",
+            state === "pending" && "bg-slate-800 border-slate-700"
+          )}
+          animate={{
+            borderColor:
+              state === "done"
+                ? "rgba(16,185,129,0.5)"
+                : state === "active"
+                ? "rgba(6,182,212,0.6)"
+                : state === "failed"
+                ? "rgba(239,68,68,0.5)"
+                : "rgba(51,65,85,1)",
+          }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          aria-hidden="true"
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={state}
+              initial={{ scale: 0.4, opacity: 0, rotate: -45 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.4, opacity: 0, rotate: 45 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="flex items-center justify-center"
+            >
+              {ICON_BY_STATE[state]}
+            </motion.span>
+          </AnimatePresence>
+        </motion.span>
+
+        {/* Connector line — fill color morphs smoothly as the stage completes */}
+        {!isLast && (
+          <motion.div
+            className="flex-1 h-px"
+            initial={false}
+            animate={{
+              backgroundColor: state === "done" ? "rgba(16,185,129,0.4)" : "rgba(30,41,59,1)",
+            }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            aria-hidden="true"
+          />
+        )}
+      </div>
+
+      <motion.div layout className="mt-2 px-0.5">
+        <motion.p
+          className="text-xs font-medium tracking-wide"
+          initial={false}
+          animate={{
+            color:
+              state === "done"
+                ? "#34d399"
+                : state === "active"
+                ? "#22d3ee"
+                : state === "failed"
+                ? "#f87171"
+                : "#475569",
+          }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+        >
+          {label}
+        </motion.p>
+        <p className="text-xs text-slate-500 mt-0.5 hidden sm:block leading-tight">
+          {description}
+        </p>
+      </motion.div>
+    </li>
+  );
+}
+
 interface StageStepperProps {
   currentStatus: AnalysisRunStatus;
   className?: string;
 }
 
 export function StageStepper({ currentStatus, className }: StageStepperProps) {
+  const reduceMotion = useReducedMotion();
   const isFailed = currentStatus === "FAILED";
   const currentIdx = isFailed ? -1 : getStageIndex(currentStatus);
+
+  const StagePill = reduceMotion ? StagePillStatic : StagePillAnimated;
 
   return (
     <div className={cn("w-full", className)} aria-label="Analysis pipeline stages">

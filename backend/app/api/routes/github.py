@@ -106,10 +106,20 @@ async def get_github_install_url(
     return {"install_url": install_url}
 
 def _frontend_redirect(param: str, value: str) -> RedirectResponse:
+    """
+    Build a redirect back to the authenticated frontend dashboard.
+
+    The target path is read from settings.FRONTEND_DASHBOARD_PATH rather
+    than hardcoded, since the dashboard route has already moved once
+    (from `/` to `/dashboard`, when a public marketing page took over `/`)
+    and a hardcoded path would silently strand users again on the next
+    route change.
+    """
     settings = get_settings()
     base_url = settings.FRONTEND_URL.rstrip("/")
+    dashboard_path = settings.FRONTEND_DASHBOARD_PATH
     query = urlencode({param: value})
-    target_url = f"{base_url}/?{query}"
+    target_url = f"{base_url}{dashboard_path}?{query}"
     return RedirectResponse(url=target_url, status_code=status.HTTP_302_FOUND)
 
 

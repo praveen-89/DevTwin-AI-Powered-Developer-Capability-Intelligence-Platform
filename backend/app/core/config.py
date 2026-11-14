@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # ── Frontend Integration ───────────────────────────────────────
     # Target URL for OAuth callbacks and browser redirects
     FRONTEND_URL: str = "http://localhost:3000"
+    # Path (on FRONTEND_URL) of the authenticated dashboard that GitHub App
+    # installation callbacks redirect back to. Kept as a setting (rather
+    # than hardcoded) so a future frontend route change does not silently
+    # strand users on the wrong page again.
+    FRONTEND_DASHBOARD_PATH: str = "/dashboard"
 
     model_config = SettingsConfigDict(
         env_file=(
@@ -80,6 +85,16 @@ class Settings(BaseSettings):
         if parsed.username or parsed.password:
             raise ValueError("FRONTEND_URL must not contain embedded user credentials.")
         return v_clean
+
+    @field_validator("FRONTEND_DASHBOARD_PATH")
+    @classmethod
+    def validate_frontend_dashboard_path(cls, v: str) -> str:
+        v_clean = v.strip()
+        if "\n" in v_clean or "\r" in v_clean:
+            raise ValueError("FRONTEND_DASHBOARD_PATH must not contain control characters or newlines.")
+        if not v_clean.startswith("/"):
+            raise ValueError("FRONTEND_DASHBOARD_PATH must start with '/'.")
+        return v_clean.rstrip("/") or "/"
 
     @field_validator("GITHUB_STATE_ENCRYPTION_KEY")
     @classmethod

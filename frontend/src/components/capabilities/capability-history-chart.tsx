@@ -17,6 +17,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { AlertTriangle, Clock, History, TrendingUp } from "lucide-react";
+import { useReducedMotion } from "motion/react";
 
 interface CapabilityHistoryChartProps {
   selectedTarget: CapabilityTargetResponse | null;
@@ -35,6 +36,8 @@ export function CapabilityHistoryChart({
   error,
   className,
 }: CapabilityHistoryChartProps) {
+  const reduceMotion = useReducedMotion();
+
   // Sort chronological order for the time series
   const sortedItems = useMemo(() => {
     return [...historyItems].sort((a, b) => {
@@ -219,7 +222,9 @@ export function CapabilityHistoryChart({
                     strokeWidth={2.5}
                     dot={{ fill: "#06b6d4", r: 4, strokeWidth: 2, stroke: "#090d16" }}
                     activeDot={{ fill: "#38bdf8", r: 6, stroke: "#0891b2", strokeWidth: 2 }}
-                    isAnimationActive={false}
+                    isAnimationActive={!reduceMotion}
+                    animationDuration={900}
+                    animationEasing="ease-out"
                   />
                 </LineChart>
               </ResponsiveContainer>

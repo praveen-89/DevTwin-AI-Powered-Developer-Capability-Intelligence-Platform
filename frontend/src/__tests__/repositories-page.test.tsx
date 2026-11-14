@@ -34,6 +34,7 @@ describe("RepositoriesPage", () => {
     token: "mock-jwt-token",
     user: null,
     developer: null,
+    isAuthenticated: false,
     loading: false,
     error: null,
     isConfigured: true,

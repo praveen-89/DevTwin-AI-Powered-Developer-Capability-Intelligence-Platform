@@ -180,3 +180,31 @@ def test_frontend_url_rejects_unsafe_destinations(monkeypatch, invalid_url):
         Settings(_env_file=None)  # type: ignore[call-arg]
     assert "FRONTEND_URL" in [e["loc"][0] for e in exc_info.value.errors()]
 
+
+def test_frontend_dashboard_path_defaults_to_dashboard(monkeypatch):
+    """FRONTEND_DASHBOARD_PATH defaults to /dashboard when unset."""
+    _set_base_env(monkeypatch)
+    monkeypatch.delenv("FRONTEND_DASHBOARD_PATH", raising=False)
+    from app.core.config import Settings
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.FRONTEND_DASHBOARD_PATH == "/dashboard"
+
+
+def test_frontend_dashboard_path_normalizes_trailing_slash(monkeypatch):
+    """FRONTEND_DASHBOARD_PATH strips a trailing slash."""
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("FRONTEND_DASHBOARD_PATH", "/dashboard/")
+    from app.core.config import Settings
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.FRONTEND_DASHBOARD_PATH == "/dashboard"
+
+
+def test_frontend_dashboard_path_rejects_missing_leading_slash(monkeypatch):
+    """FRONTEND_DASHBOARD_PATH must start with '/'."""
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("FRONTEND_DASHBOARD_PATH", "dashboard")
+    from app.core.config import Settings
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)  # type: ignore[call-arg]
+    assert "FRONTEND_DASHBOARD_PATH" in [e["loc"][0] for e in exc_info.value.errors()]
+

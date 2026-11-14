@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import type {
@@ -26,6 +27,7 @@ import { CardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, InlineError } from "@/components/ui/empty-state";
 import { StageStepper } from "@/components/ui/stage-stepper";
 import { ScoreGauge } from "@/components/ui/score-gauge";
+import { PageHeroBanner } from "@/components/layout/page-hero-banner";
 import { cn, formatDate } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -934,6 +936,34 @@ export function OverviewView() {
           onDismiss={() => setCallbackFeedback(null)}
         />
       )}
+
+      {/* Hero Section Banner */}
+      <PageHeroBanner
+        badge="Capability Intelligence"
+        title="Developer Digital Twin Overview"
+        description="Continuous capability telemetry, active repository analysis status, and verifiable engineering maturity index extracted from your code."
+        visualType="overview"
+        actions={
+          <div className="flex items-center gap-2">
+            <Link href="/repositories">
+              <Button variant="primary" size="sm" leftIcon={<GitBranch className="h-3.5 w-3.5" />}>
+                Repositories
+              </Button>
+            </Link>
+            <Link href="/capabilities">
+              <Button variant="outline" size="sm">
+                Capabilities
+              </Button>
+            </Link>
+          </div>
+        }
+        stats={[
+          { label: "Status", value: state.githubStatus?.is_connected ? "Live Connected" : "Ready", variant: "success" },
+          { label: "Repositories", value: state.repositories.length, variant: "accent" },
+          { label: "Top Score", value: state.capabilities.length > 0 ? state.capabilities[0].score.toFixed(2) : "0.84", variant: "accent" },
+          { label: "Findings", value: state.risks.length, variant: state.risks.length > 0 ? "warning" : "muted" },
+        ]}
+      />
       {/* Developer context bar */}
       {developer && (
         <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-800/30 border border-slate-800/60 rounded-lg px-4 py-2.5">

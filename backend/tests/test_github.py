@@ -155,7 +155,7 @@ async def test_github_callback_success(app):
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
 
         # Verify state is claimed
         mock_claim.assert_awaited_once_with(mock_session, "valid_state")
@@ -201,7 +201,7 @@ async def test_github_callback_empty_installations(app):
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
 
     app.dependency_overrides.clear()
 
@@ -237,7 +237,7 @@ async def test_github_callback_account_new_insert(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
 
         # Verify session.add was called with a GitHubAccount with correct fields
         mock_session.add.assert_called_once()
@@ -288,7 +288,7 @@ async def test_github_callback_account_reconnect_same_developer(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
 
         # Existing row must be mutated in-place (no new add)
         mock_session.add.assert_not_called()
@@ -335,7 +335,7 @@ async def test_github_callback_account_conflict_different_developer(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=account_conflict"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=account_conflict"
         # Existing row must be untouched
         assert existing.username == "originalowner"
         assert existing.developer_id == owner_developer_id
@@ -384,7 +384,7 @@ async def test_github_callback_integrity_error_same_developer_race(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
         mock_session.rollback.assert_called_once()
 
     app.dependency_overrides.clear()
@@ -428,7 +428,7 @@ async def test_github_callback_integrity_error_different_developer_race(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=account_conflict"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=account_conflict"
         mock_session.rollback.assert_called_once()
 
     app.dependency_overrides.clear()
@@ -471,7 +471,7 @@ async def test_github_callback_integrity_error_developer_uniqueness_conflict(app
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=developer_conflict"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=developer_conflict"
         mock_session.rollback.assert_called_once()
 
     app.dependency_overrides.clear()
@@ -503,7 +503,7 @@ async def test_github_callback_db_failure_returns_500(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=linking_failed"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=linking_failed"
 
     app.dependency_overrides.clear()
 
@@ -576,7 +576,7 @@ async def test_github_callback_account_linking_no_installation_id(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
         added = mock_session.add.call_args[0][0]
         assert isinstance(added, GitHubAccount)
         assert added.installation_id is None
@@ -647,7 +647,7 @@ async def test_github_callback_user_api_http_error(app):
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=identity_failed"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=identity_failed"
         mock_list.assert_not_called()
 
     app.dependency_overrides.clear()
@@ -678,7 +678,7 @@ async def test_github_callback_user_api_response_error(app):
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=identity_failed"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=identity_failed"
         mock_list.assert_not_called()
 
     app.dependency_overrides.clear()
@@ -709,7 +709,7 @@ async def test_github_callback_installations_api_http_error(app):
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=installations_failed"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=installations_failed"
 
     app.dependency_overrides.clear()
 
@@ -739,7 +739,7 @@ async def test_github_callback_installations_api_response_error(app):
             response = await client.get("/github/callback?state=valid_state&code=valid_code")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=installations_failed"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=installations_failed"
 
     app.dependency_overrides.clear()
 
@@ -750,7 +750,7 @@ async def test_github_callback_oauth_error(app):
         response = await client.get("/github/callback?state=xyz&error=access_denied")
 
     assert response.status_code == 302
-    assert response.headers["location"] == "http://localhost:3000/?github_error=access_denied"
+    assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=access_denied"
 
 @pytest.mark.asyncio
 async def test_github_callback_missing_code(app):
@@ -759,7 +759,7 @@ async def test_github_callback_missing_code(app):
         response = await client.get("/github/callback?state=xyz")
 
     assert response.status_code == 302
-    assert response.headers["location"] == "http://localhost:3000/?github_error=missing_code"
+    assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=missing_code"
 
 @pytest.mark.asyncio
 async def test_github_callback_unknown_state(app):
@@ -776,7 +776,7 @@ async def test_github_callback_unknown_state(app):
             response = await client.get("/github/callback?state=unknown&code=xyz")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=state_expired"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=state_expired"
         mock_exchange.assert_not_called()
 
     app.dependency_overrides.clear()
@@ -796,7 +796,7 @@ async def test_github_callback_expired_or_replayed_state(app):
             response = await client.get("/github/callback?state=expired&code=xyz")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=state_expired"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=state_expired"
         mock_exchange.assert_not_called()
 
     app.dependency_overrides.clear()
@@ -827,7 +827,7 @@ async def test_github_callback_exchange_failure(app, caplog):
             response = await client.get("/github/callback?state=xyz&code=secret_code_value")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github_error=exchange_failed"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github_error=exchange_failed"
 
     # Check app logs for secret exposure (httpx request logs the URL, which we ignore)
     app_logs = [record.message for record in caplog.records if record.name.startswith("app.")]
@@ -911,7 +911,7 @@ async def test_github_callback_installation_exact_personal_match(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id == 456
 
@@ -947,7 +947,7 @@ async def test_github_callback_installation_multiple_with_one_personal(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id == 456
 
@@ -982,7 +982,7 @@ async def test_github_callback_installation_only_org_installations(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id is None
 
@@ -1013,7 +1013,7 @@ async def test_github_callback_installation_zero_installations(app):
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
         added = mock_session.add.call_args[0][0]
         assert added.installation_id is None
 
@@ -1055,7 +1055,7 @@ async def test_github_callback_reconnect_preserves_installation_if_unchanged(app
             response = await client.get("/github/callback?state=s&code=c")
 
         assert response.status_code == 302
-        assert response.headers["location"] == "http://localhost:3000/?github=success"
+        assert response.headers["location"] == "http://localhost:3000/dashboard?github=success"
         assert existing.installation_id == 456
         assert existing.username == "newname"
         mock_session.commit.assert_awaited_once()
@@ -1750,10 +1750,35 @@ async def test_github_callback_respects_custom_frontend_url(app):
     """
     with patch("app.api.routes.github.get_settings") as mock_settings:
         mock_settings.return_value.FRONTEND_URL = "https://app.devtwin.io"
+        mock_settings.return_value.FRONTEND_DASHBOARD_PATH = "/dashboard"
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get("/github/callback?state=xyz&error=access_denied")
 
     assert response.status_code == 302
-    assert response.headers["location"] == "https://app.devtwin.io/?github_error=access_denied"
+    assert response.headers["location"] == "https://app.devtwin.io/dashboard?github_error=access_denied"
+
+
+@pytest.mark.asyncio
+async def test_github_callback_redirects_to_configured_dashboard_path_not_hardcoded_root(app):
+    """
+    Regression test: the callback must redirect to settings.FRONTEND_DASHBOARD_PATH
+    (the authenticated app route), not a hardcoded "/" root path.
+
+    Root cause: the frontend's dashboard moved from "/" to "/dashboard" when a
+    public marketing page took over "/". A hardcoded "/" redirect here landed
+    the user back on the marketing page after a successful GitHub App install,
+    instead of the dashboard, with no visible status change.
+    """
+    with patch("app.api.routes.github.get_settings") as mock_settings:
+        mock_settings.return_value.FRONTEND_URL = "http://localhost:3000"
+        mock_settings.return_value.FRONTEND_DASHBOARD_PATH = "/custom-dashboard-path"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get("/github/callback?state=xyz&error=access_denied")
+
+    assert response.status_code == 302
+    location = response.headers["location"]
+    assert location == "http://localhost:3000/custom-dashboard-path?github_error=access_denied"
+    # Must NOT be the old hardcoded root-path redirect.
+    assert location != "http://localhost:3000/?github_error=access_denied"
 
 

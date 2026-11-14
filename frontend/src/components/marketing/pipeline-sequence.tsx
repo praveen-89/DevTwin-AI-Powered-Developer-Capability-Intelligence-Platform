@@ -61,7 +61,7 @@ export function PipelineSequence({ stages }: { stages: PipelineStage[] }) {
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60",
                 isActive
                   ? "border-cyan-500/40 bg-cyan-500/10"
-                  : "border-slate-800 bg-slate-900/40 hover:border-slate-700"
+                  : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/40 dark:hover:border-slate-700"
               )}
             >
               {isActive && (
@@ -74,14 +74,14 @@ export function PipelineSequence({ stages }: { stages: PipelineStage[] }) {
               <Icon
                 className={cn(
                   "h-4 w-4 flex-shrink-0 relative z-10",
-                  isActive ? "text-cyan-400" : "text-slate-500 group-hover:text-slate-300"
+                  isActive ? "text-cyan-600 dark:text-cyan-400" : "text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300"
                 )}
                 aria-hidden="true"
               />
               <span
                 className={cn(
                   "relative z-10 text-xs font-semibold tracking-tight",
-                  isActive ? "text-cyan-300" : "text-slate-400"
+                  isActive ? "text-cyan-700 dark:text-cyan-300" : "text-slate-600 dark:text-slate-400"
                 )}
               >
                 {stage.label}
@@ -92,7 +92,7 @@ export function PipelineSequence({ stages }: { stages: PipelineStage[] }) {
       </div>
 
       {/* Active stage detail */}
-      <div className="min-h-[72px] rounded-lg border border-slate-800 bg-slate-900/30 p-5">
+      <div className="min-h-[72px] rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/30">
         <AnimatePresence mode="wait">
           <motion.p
             key={active}
@@ -100,9 +100,9 @@ export function PipelineSequence({ stages }: { stages: PipelineStage[] }) {
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? {} : { opacity: 0, y: -4 }}
             transition={{ duration: reduceMotion ? 0 : 0.25 }}
-            className="text-sm leading-relaxed text-slate-300"
+            className="text-sm leading-relaxed text-slate-700 dark:text-slate-300"
           >
-            <span className="font-semibold text-slate-100">{stages[active].label}: </span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">{stages[active].label}: </span>
             {stages[active].description}
           </motion.p>
         </AnimatePresence>

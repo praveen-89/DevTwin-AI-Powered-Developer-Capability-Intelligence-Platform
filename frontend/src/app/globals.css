@@ -1,7 +1,58 @@
 @import "tailwindcss";
 
+/*
+ * Class-based dark variant (next-themes toggles `.dark` on <html>).
+ * Safe globally: the authenticated dashboard uses zero `dark:`-prefixed
+ * utilities (hardcoded hex colors throughout), so this only affects the
+ * marketing site and the login/signup pages, which are the only places
+ * `dark:` variants are used.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --card-border: #e2e8f0;
+    
+    --card-elevated: #f1f5f9;
+    --card-elevated-border: #cbd5e1;
+    
+    --muted: #f1f5f9;
+    --muted-foreground: #475569;
+    --muted-subtle: #64748b;
+    
+    --accent: #0891b2;
+    --accent-hover: #06b6d4;
+    --accent-muted: rgba(8, 145, 178, 0.1);
+    --accent-border: rgba(8, 145, 178, 0.35);
+
+    --success: #059669;
+    --success-muted: rgba(5, 150, 105, 0.1);
+    --success-border: rgba(5, 150, 105, 0.35);
+
+    --warning: #d97706;
+    --warning-muted: rgba(217, 119, 6, 0.1);
+    --warning-border: rgba(217, 119, 6, 0.35);
+
+    --danger: #dc2626;
+    --danger-muted: rgba(220, 38, 38, 0.1);
+    --danger-border: rgba(220, 38, 38, 0.35);
+
+    --info: #2563eb;
+    --info-muted: rgba(37, 99, 235, 0.1);
+    --info-border: rgba(37, 99, 235, 0.35);
+
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+  }
+
+  :root.dark, .dark {
     --background: #090d16;
     --foreground: #f8fafc;
     
@@ -36,11 +87,6 @@
     --info: #3b82f6;
     --info-muted: rgba(59, 130, 246, 0.12);
     --info-border: rgba(59, 130, 246, 0.35);
-
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
-    --radius-xl: 1rem;
   }
 }
 
@@ -77,12 +123,21 @@ code, kbd, samp, pre {
   background: #334155;
 }
 
-/* Grid background pattern for technical developer aesthetic */
+/* Grid background pattern for technical developer aesthetic.
+   Light-mode variant uses dark-on-light lines; only reachable on the
+   marketing/auth routes which are the only places `.light`/`.dark` affect
+   anything visually (see @custom-variant dark above). */
 .tech-grid {
   background-size: 32px 32px;
-  background-image: 
+  background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+:root:not(.dark) .tech-grid {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
 }
 
 .radar-glow {

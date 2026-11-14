@@ -240,6 +240,373 @@ The queue is PostgreSQL-native (using `analysis_jobs` table + polling), NOT Redi
   GitHub App used for repository access) — flagged to the developer, not
   attempted from code. Real Google OAuth remains unimplemented by design.
 
+### Checkpoint 34 — Authenticated Dashboard Motion Polish (Presentation Only) (2026-11-12)
+
+- **Scope**: Presentation/animation layer only, frontend-only. No data
+  fetching, API calls, scoring logic, or backend file was touched. The
+  `motion` dependency already existed from Checkpoint 33 — not reinstalled.
+- **What changed**:
+  - `src/components/ui/stage-stepper.tsx` — the analysis-run stage pills
+    (`QUEUED → FETCHING → MINING → SKILL_GRAPH → CODE_RISK → CAPABILITY →
+    COMPLETED`, the real `AnalysisRunStatus` enum from `types/api.ts`, no
+    invented stage names) now morph between icons via `AnimatePresence`
+    and `layout`, and the connector line / label color tween instead of
+    snapping. Falls back to the original static markup verbatim when
+    `prefers-reduced-motion` is set.
+  - `src/components/ui/score-gauge.tsx` — score and confidence numbers now
+    tween via a new shared `AnimatedNumber` component
+    (`src/components/ui/animated-number.tsx`, uses Motion's imperative
+    `animate()`), and the score/confidence bar widths animate with
+    `motion.div` instead of snapping. This is the component shared by the
+    Capabilities page, the Overview dashboard, and anywhere else a
+    capability score is rendered, so the tween applies everywhere
+    consistently without per-page duplication.
+  - `src/components/capabilities/capability-history-chart.tsx` — the
+    Recharts `<Line>` now draws in on initial render
+    (`isAnimationActive={!reduceMotion}`, `animationDuration={900}`)
+    instead of `isAnimationActive={false}`. No chart library change.
+  - `src/app/(app)/capabilities/page.tsx` — the per-target capability
+    cards get a staggered mount entrance, `whileHover`/`whileTap`
+    micro-interactions, all via conditional `motion.div` props (empty
+    object when `prefers-reduced-motion`, so the element renders as a
+    plain div with no transform animation).
+  - `src/app/(app)/evidence/page.tsx` — evidence table rows get the same
+    staggered entrance pattern via a new shared `StaggerItem` component
+    (`src/components/ui/stagger-item.tsx`, supports `div`/`li`/`tr`) for
+    visual consistency with the capability cards.
+  - New shared primitives: `src/components/ui/animated-number.tsx`,
+    `src/components/ui/stagger-item.tsx`.
+- **Bklit UI**: evaluated and **not installed**. The existing Recharts
+  line chart already does what's needed (temporal line + custom tooltip +
+  reference line) once its built-in animation is turned on; installing a
+  second chart library for one chart would mean running two charting
+  approaches side by side with no component it clearly replaces — against
+  this task's own instruction not to leave permanent duplication. Decision
+  recorded here rather than silently skipped.
+- **Preserved untouched**: both "Run-Scoped Scoring" / "Run-Scoped
+  History" disclaimer banners (not animated, not auto-dismissing, no
+  opacity fade), all existing ARIA attributes (`role="list"`,
+  `aria-label`, `aria-hidden`, `role="progressbar"` with its
+  `aria-valuenow`/`aria-valuemin`/`aria-valuemax`/`aria-label`), and all
+  data-fetching/polling logic in `repositories/page.tsx`,
+  `capabilities/page.tsx`, `evidence/page.tsx`, and `overview-view.tsx`.
+  The marketing site, `/login`, `/signup`, and `/auth/callback` from
+  Checkpoint 33 were not touched.
+- **Verified**: `tsc --noEmit` clean; `next build` succeeds (all 13
+  app routes prerender, same route list as Checkpoint 33); Vitest 72/72
+  passing, unchanged from Checkpoint 33 (no test needed rewriting —
+  `repositories-page.test.tsx`'s assertions target `StatusBadge` text and
+  button roles, which this change does not alter; motion-wrapped elements
+  still forward `role`/`aria-label`/`onClick` to the underlying DOM node).
+- **Not done**: No new Vitest tests were added specifically for the
+  animations themselves (e.g. asserting `AnimatePresence` transition
+  timing) — out of scope for a presentation-only pass and consistent with
+  how Checkpoint 33's marketing animations were verified (build + existing
+  suite, not new animation-specific tests).
+
+### Checkpoint 35 — Access-Control Regression: Unauthenticated `/dashboard` Shell Fixed (2026-11-12)
+
+- **Severity**: Real access-control bug, not cosmetic. A visitor with no
+  valid session could see the full protected dashboard shell (sidebar,
+  all six nav items) at `/dashboard`, even though the header correctly
+  showed "Sign in". Confirmed and reproduced (not hypothetical) before any
+  fix was written.
+- **Confirmed root cause**: `src/app/(app)/layout.tsx`'s guard and
+  `src/components/layout/header.tsx` both read the same `useAuth()`
+  context, but applied **different predicates** for "authenticated":
+  the guard checked `!!token` only; the header checked `!!(token &&
+  developer)`. When a bearer token is present in storage but stale,
+  expired, or otherwise rejected by the backend, `AuthProvider`'s
+  `fetchDeveloper()` fails on a path that does **not** clear the token
+  (only an explicit HTTP 401 from `/developers/me` clears it — a network-
+  level failure, e.g. "Failed to fetch", falls through to a generic error
+  branch that leaves `token` set and `developer` null forever). Result:
+  `token` truthy + `developer` null → guard says "authenticated" (renders
+  dashboard shell), header says "not authenticated" (shows "Sign in") —
+  the two disagreed, which should never be possible from one source of
+  truth. Reproduced directly: injecting an invalid token into
+  `sessionStorage` and reloading `/dashboard` rendered the full shell with
+  "Failed to fetch" errors in every data widget, while the header showed
+  "Sign in to connect" / "Sign in" — the exact symptom from the reported
+  screenshot.
+- **Fix**: Added a single derived `isAuthenticated: boolean` field to
+  `AuthState` (`src/lib/auth-context.tsx`), computed as `!!(token &&
+  developer)` — i.e. the header's stricter, already-correct predicate.
+  Both the `(app)` guard and the header now read this one field; neither
+  computes its own notion of "authenticated" anymore, so they cannot
+  disagree again by construction.
+  - `src/components/layout/app-auth-guard.tsx` (new): the guard's client
+    logic, moved out of `layout.tsx` (see below). Blocks rendering of
+    `{children}` until `loading` resolves (shows a spinner), then
+    redirects to `/login` via `router.replace` the moment
+    `isAuthenticated` resolves false, and renders `null` while that
+    redirect is in flight (no flash of protected content).
+  - `src/app/(app)/layout.tsx`: now a thin Server Component that renders
+    `<AppAuthGuard>` and declares `export const instant = false` (see
+    Issue 2 below). Moved out of a `"use client"` file because Next 16's
+    `instant` route segment config throws if exported from a Client
+    Component — this split was required, not optional.
+  - `src/components/layout/header.tsx`: now destructures `isAuthenticated`
+    from `useAuth()` instead of re-deriving `token && developer` inline.
+  - OAuth callback race (`src/app/auth/callback/page.tsx`) was inspected
+    and left unchanged — it already waits on `!loading && token` before
+    redirecting to `/dashboard`, and `loading` does not resolve to `false`
+    until `fetchDeveloper()` has settled, so a freshly-completed GitHub
+    OAuth sign-in is never bounced back to `/login` before the session
+    (and `isAuthenticated`) has had a chance to resolve.
+- **Deliberate trade-off (documented, not silent)**: `isAuthenticated`
+  requiring a backend-confirmed `developer` profile (not just a live
+  Supabase/dev token) means a user with a perfectly valid session will
+  still be redirected to `/login` if the backend is transiently
+  unreachable when `/developers/me` is called. This is intentional here:
+  the dashboard is unusable without the backend regardless, and silently
+  treating an unconfirmable token as "authenticated" is exactly the bug
+  being fixed. If this trade-off becomes a UX problem later, the right
+  fix is distinguishing "network error talking to a reachable backend"
+  from "token rejected", not reverting to token-only gating.
+- **Issue 2 (cosmetic, dev-only)**: Next 16 Cache Components
+  (`cacheComponents: true` in `next.config.ts`) logged `Could not
+  validate that a segment in your UI has instant navigation... Dropped
+  segment: src/app/(app)/dashboard/page.tsx` because the segment's
+  content depends on client-side auth state unknowable at prerender time.
+  `export const instant = false` was added to `src/app/(app)/layout.tsx`
+  as specified, plus — confirmed necessary by testing, since Next
+  validates the Page segment independently of its layout — directly to
+  `src/app/(app)/dashboard/page.tsx` (the only Server Component page in
+  the group; the literal warning quoted in the bug report named this
+  exact segment and is now gone). The other five `(app)` pages
+  (`repositories`, `capabilities`, `coderisk`, `skillgraph`, `evidence`)
+  are themselves `"use client"` pages, so they cannot export `instant`
+  without the same Server/Client split applied to the layout and
+  dashboard page; each logs its own instance of the same dev-only warning
+  independently. Not restructured in this pass: two of those five files
+  (`capabilities/page.tsx`, `evidence/page.tsx`) had unrelated, unfinished
+  uncommitted animation-pass edits from Checkpoint 34 in the same working
+  tree, and a Server/Client split is a structural change to exactly the
+  files that pass is mid-edit on — doing it here risked colliding with
+  that unrelated work. Tracked as a known limitation below, not silently
+  dropped.
+- **Tests added** (`frontend/e2e/auth.spec.ts`):
+  - `A0.3` — reproduces the regression directly (stale/invalid token in
+    `sessionStorage`) and asserts `/dashboard` redirects to `/login` and
+    the sidebar never renders.
+  - `A1b.1` — mocks a backend-confirmed session (`/developers/me` returns
+    200) and asserts the header's signed-in state and the dashboard
+    shell's protected content render together, on `/dashboard`, in the
+    same pass — i.e. the two can no longer disagree.
+- **Verified**: `tsc --noEmit` clean. `next build` succeeds (same 13
+  prerendered `(app)`/marketing/auth routes as Checkpoint 34). Vitest
+  72/72 passing (4 existing test files' `useAuth()` mocks updated to
+  include the new `isAuthenticated` field — no behavioral test changes).
+  Playwright: all `auth.spec.ts` tests pass (13 total, 10 run + 3 skipped
+  without `DEVTWIN_DEV_TOKEN`, including both new tests). Full suite:
+  23 passed, 2 pre-existing failures unrelated to this change
+  (`mocked-flows.spec.ts` M5 SkillGraph canvas visibility, M6 Capabilities
+  "Run-Scoped" text visibility — both touch files already modified by the
+  concurrent, uncommitted Checkpoint 34 animation pass; neither test
+  exercises auth/guard/header code, and this change does not touch
+  `skillgraph/page.tsx`, `capability-history-chart.tsx`, or
+  `score-gauge.tsx`). Dev server log confirmed the instant-navigation
+  warning is gone for `/dashboard` specifically after the fix, across a
+  fresh `next dev` restart.
+- **Known limitation carried forward**: the instant-navigation dev
+  warning still logs once per non-`/dashboard` `(app)` route
+  (`repositories`, `capabilities`, `coderisk`, `skillgraph`, `evidence`)
+  because those pages are Client Components and cannot export `instant`
+  themselves. Fully silencing it for all six routes requires the same
+  Server-page/Client-content split used for `dashboard/page.tsx` and
+  `layout.tsx`, applied to the remaining five pages — left for a future,
+  dedicated pass once the concurrent animation-pass edits to those files
+  are committed.
+
+### Checkpoint 36 — GitHub App Install Callback Redirected to Stale Root Path (2026-11-13)
+- **Bug**: After installing the DevTwin GitHub App on GitHub's side, the
+  browser did not land back on the authenticated dashboard — it appeared
+  stranded, with GitHub connection status not visibly updating.
+- **Confirmed root cause (code, not a GitHub console setting)**:
+  `backend/app/api/routes/github.py`'s `_frontend_redirect()` helper built
+  every post-callback redirect as `f"{base_url}/?{query}"` — a hardcoded
+  root path. This was correct when `/` was the dashboard, but Checkpoint
+  33/34's marketing site took over `/` and moved the authenticated
+  dashboard to `/dashboard` (see `(marketing)` vs `(app)` route groups in
+  `ARCHITECTURE.md`). The existing backend test suite had the bug baked in
+  as an assertion: every `test_github.py` callback test asserted
+  `location == "http://localhost:3000/?github=..."`. Confirmed by reading
+  `frontend/src/app/(app)/dashboard/page.tsx` (dashboard lives at
+  `/dashboard`) and `frontend/src/app/(marketing)/page.tsx` (marketing
+  landing page now owns `/`) — the callback was redirecting every install
+  attempt (success and failure) onto the public marketing page, which has
+  no handler for `?github=success` / `?github_error=...` query params, so
+  nothing on screen ever changed.
+- **Fix**: Added `FRONTEND_DASHBOARD_PATH` (default `/dashboard`) to
+  `backend/app/core/config.py` (`Settings`), validated to start with `/`
+  and normalized of a trailing slash. `_frontend_redirect()` in
+  `backend/app/api/routes/github.py` now builds the target URL as
+  `{FRONTEND_URL}{FRONTEND_DASHBOARD_PATH}?{query}` instead of a hardcoded
+  `/`, for both the success (`?github=success`) and every failure
+  (`?github_error=...`) branch. No change to installation_id persistence,
+  token handling, or OAuth state logic — only the redirect target.
+  `frontend/src/components/overview/overview-view.tsx` already intercepts
+  `?github=success` / `?github_error=...` on mount and refetches GitHub
+  status + repositories without a manual refresh — confirmed by reading
+  it; no frontend change was needed.
+- **Verified**: Updated all ~23 existing `test_github.py` redirect
+  assertions from `.../?github...` to `.../dashboard?github...`; added
+  `test_github_callback_redirects_to_configured_dashboard_path_not_hardcoded_root`
+  (proves the path comes from settings, not a literal `/`) and three new
+  `test_config.py` tests for `FRONTEND_DASHBOARD_PATH` validation. Full
+  backend suite: 389 passed (up from the prior 385-test baseline). No
+  frontend files were changed by this fix, so `tsc`/`next build` were not
+  re-run for this task.
+- **Not verified live**: did not run a real GitHub App install round-trip
+  in this environment (no browser/GitHub session available here) — relying
+  on the unit/integration test instead, as instructed. The developer
+  should do one manual end-to-end install against their existing test
+  GitHub App installation to confirm the full round trip now lands on
+  `/dashboard` with GitHub shown as connected.
+- **No GitHub App console change was required for this fix** — the bug
+  was fully a backend code defect (hardcoded redirect path), not a Setup
+  URL / OAuth callback URL misconfiguration in the GitHub App's own
+  settings.
+
+### Checkpoint 37 — Live GitHub Connect Debugging: Two Real Bugs Found via Manual Testing (2026-11-13)
+- Checkpoint 36's redirect-path fix was verified live by the developer
+  against the real GitHub App installation flow, with two further issues
+  surfacing only through actual manual testing (not reproducible from
+  code review alone):
+- **Bug A — cross-developer `account_conflict` false positive**: the
+  developer's real account (`praveen.strange0@gmail.com`) could not link
+  its GitHub identity (`praveen-89`) because a `github_accounts` row
+  already existed for that GitHub identity under a leftover test
+  developer profile (`test1@gmail.com`, used during Checkpoint 32's Phase
+  14 evaluation testing). Confirmed via live Network-tab tracing that the
+  GitHub OAuth-during-installation redirect mechanism itself works
+  correctly (`github.com/apps/devtwin2/installations/new` →
+  `select_target` → `localhost:8000/github/callback` →
+  `localhost:3000/dashboard?github_error=account_conflict`) — this was
+  stale test data, not a code defect. `DELETE /github/disconnect` does
+  NOT free a GitHub identity for a different developer (per ADR-014, it
+  only soft-disconnects within the same developer); the stale
+  `github_accounts` row was deleted directly from the DB with the
+  developer's explicit approval. Also noted: GitHub's
+  `/installations/new` skips the full Install & Authorize + redirect
+  cycle entirely when the app is already installed for that account —
+  retesting requires a genuine uninstall first, not just a backend-side
+  DB cleanup.
+- **Bug B — global repository uniqueness constraints (real, fixed)**:
+  `repositories` carried bare global `UNIQUE(github_repo_id)` and
+  `UNIQUE(full_name)` constraints from `001_initial_schema.sql`, making
+  repository registration global across ALL developers instead of scoped
+  per-project. A repo already registered by any developer (including
+  leftover test data) would incorrectly return HTTP 409 "Repository
+  already registered." for every other developer. Fixed via
+  `database/migrations/006_scope_repository_uniqueness.sql`
+  (ADR-020 in DECISIONS.md), replacing both with composite
+  `UNIQUE(project_id, github_repo_id)` / `UNIQUE(project_id, full_name)`
+  constraints. Applied directly to the live Supabase DB with the
+  developer's explicit approval. `docs/11_DATABASE_SCHEMA.md` updated.
+  `backend/app/api/routes/repositories.py`'s duplicate-detection code
+  needed no change (it already catches any `IntegrityError` with SQLSTATE
+  23505 generically). Full backend suite re-run after the migration:
+  389/389 passing.
+- **Noted, not fixed**: `DECISIONS.md` ADR-015 (status ACTIVE) already
+  documented that GitHub's `/installations/new` endpoint ignores PKCE
+  parameters and decided to remove `code_challenge`/`code_challenge_method`
+  from `GET /github/install`'s construction of that URL — but the current
+  code in `backend/app/api/routes/github.py` still sends them, and the
+  function's own docstring contradicts the ADR. Confirmed harmless (GitHub
+  silently ignores them, consistent with the ADR's own finding) and not
+  the cause of any bug fixed in this checkpoint, so left as a flagged
+  documentation/implementation drift for a future cleanup rather than
+  fixed opportunistically here.
+- End state: GitHub App connection flow fully verified working live by
+  the developer (`@praveen-89` shows connected, repository
+  `praveen-89/SevaGrid` registered and visible on the dashboard).
+- **Still open, not addressed this session**: the dev-only
+  "could not validate instant navigation" warning still fires for
+  `repositories`, `capabilities`, `coderisk`, `skillgraph`, `evidence`
+  (all client-component pages) — same limitation already recorded in
+  Checkpoint 35.
+
+### Checkpoint 38 — Marketing/Auth Visual Redesign: Illustrations, Glassmorphism, Light/Dark/System Theme (2026-11-14)
+- Scope was intentionally narrow: public marketing site (`/`, `/how-it-works`,
+  `/about`), `/login` + `/signup` (via `src/components/auth/auth-page.tsx`),
+  and new theme infrastructure. The authenticated `(app)` dashboard, backend,
+  and database were explicitly out of scope and were not touched by this
+  checkpoint (verified — see below).
+- **New dependency — `next-themes@^0.4.6`** (installed with
+  `--legacy-peer-deps`, matching this environment's existing pre-existing
+  `vitest`/`@types/node` peer-conflict workaround; unrelated to this change).
+  Chosen because it is the standard, minimal, FOUC-safe way to implement
+  Light/Dark/System theme selection with SSR-safe hydration, avoiding a
+  hand-rolled theme system that would be easy to get wrong (flash-of-wrong-theme,
+  `localStorage` read timing, etc.). **Flagged for the developer's explicit
+  ADR decision** per AGENTS.md's "new technology" rule — no ADR was written
+  as part of this checkpoint, by design (that decision belongs to the
+  developer).
+- Added `frontend/src/components/theme/theme-provider.tsx` (wraps
+  `next-themes`' `ThemeProvider`, `attribute="class"`, `defaultTheme="system"`)
+  and `frontend/src/components/theme/theme-toggle.tsx` (3-way Light/System/Dark
+  control). Wired into `frontend/src/app/layout.tsx` as the one minimal root
+  change required (`<ThemeProvider>` wraps the existing `<AuthProvider>`;
+  `suppressHydrationWarning` added to `<html>`, which is `next-themes`' own
+  documented requirement). No other root-layout behavior changed.
+- **Dashboard safety verification**: confirmed via `grep` *before* making any
+  change that zero `dark:`-prefixed Tailwind utilities and zero
+  `bg-background`/`text-foreground`/`var(--background)`-style theme-variable
+  usages exist anywhere under `(app)/`, `components/layout`, `components/ui`,
+  or any dashboard feature component — the dashboard is 100% hardcoded
+  hex/slate classes. Added a global `@custom-variant dark (&:where(.dark, .dark *));`
+  to `globals.css` so `dark:` utilities respond to the class `next-themes`
+  toggles on `<html>` — since the dashboard uses no `dark:` utilities at all,
+  toggling that class is a visual no-op there. Re-verified after all edits
+  (same grep, zero hits outside the marketing/auth/theme scope) — the
+  dashboard's dark-only appearance is unchanged regardless of the selected
+  theme. `tech-grid`'s light-mode line color was given an explicit
+  `:root:not(.dark) .tech-grid` override in `globals.css` (only reachable on
+  marketing/auth routes, for the same reason).
+- **Visual redesign**: added `frontend/src/components/marketing/illustrations.tsx`
+  (five custom inline-SVG illustrations — `GraphIllustration` (SkillGraph
+  node/edge motif), `PipelineFlowIllustration`, `EvidenceStackIllustration`,
+  `RadarScoreIllustration`, `AuthMotifIllustration` — no external image
+  generation tool was available in this environment, and abstract technical
+  SVGs are the right call for this product regardless) and
+  `frontend/src/components/marketing/glass-card.tsx` (shared
+  `backdrop-blur-md` translucent card, light/dark aware). Applied these plus
+  the existing `Reveal`/`HeroEntrance`/`PipelineSequence` animation
+  primitives (reused, not replaced) across `page.tsx`, `how-it-works/page.tsx`,
+  `about/page.tsx`, `marketing-nav.tsx`, `marketing-footer.tsx`, and
+  `auth-page.tsx`. All existing marketing/auth copy was preserved verbatim —
+  this was a visual/structural pass only, no new product claims were added.
+  `auth-page.tsx`'s actual auth logic (`signInWithGithub` call, dev-token
+  fallback, error handling, redirect-if-authenticated effect) was not
+  touched — only its JSX/styling.
+- Tests: `npx tsc --noEmit` clean. `npx next build` succeeded (Turbopack,
+  all 13 app routes + `_not-found` prerendered as static, same route list as
+  prior checkpoints). `npx vitest run --pool=forks` (full suite): 72/72
+  passing, including the existing 8 `auth-page.test.tsx` tests unmodified —
+  confirming the visual changes did not break any role/text/placeholder
+  query. The previously-reported Vitest/`src/types/api.ts` toolchain issue
+  did not reproduce in this session with `--pool=forks` run against the
+  full suite; left unexplained rather than claimed fixed, since no code
+  that would plausibly fix a toolchain issue was touched this checkpoint.
+- Files touched: `frontend/src/app/layout.tsx`,
+  `frontend/src/app/globals.css`,
+  `frontend/src/app/(marketing)/{layout,page}.tsx`,
+  `frontend/src/app/(marketing)/how-it-works/page.tsx`,
+  `frontend/src/app/(marketing)/about/page.tsx`,
+  `frontend/src/components/marketing/{marketing-nav,marketing-footer}.tsx`,
+  `frontend/src/components/auth/auth-page.tsx`,
+  `frontend/package.json` / `package-lock.json` (new dependency only).
+  New files: `frontend/src/components/theme/{theme-provider,theme-toggle}.tsx`,
+  `frontend/src/components/marketing/{illustrations,glass-card}.tsx`.
+- **Not touched** (confirmed by diff/grep): `backend/`, `database/`, any
+  `(app)/` dashboard page or component, `frontend/src/lib/auth-context.tsx`'s
+  logic, and all other uncommitted work already in the working tree from
+  prior sessions (the marketing/OAuth build-out, dashboard motion pass,
+  auth-guard fix, GitHub App install redirect fix, repository-uniqueness
+  migration, and the dashboard Server/Client component split).
+
 ## Forbidden Behaviors
 Agents must NOT:
 - Invent requirements

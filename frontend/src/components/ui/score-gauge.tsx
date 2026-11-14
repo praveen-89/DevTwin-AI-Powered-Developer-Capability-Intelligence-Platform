@@ -1,4 +1,8 @@
+"use client";
+
 import { cn, formatScore } from "@/lib/utils";
+import { motion, useReducedMotion } from "motion/react";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 
 interface ScoreGaugeProps {
   /** 0.0 – 1.0 normalized score */
@@ -31,9 +35,11 @@ export function ScoreGauge({
   size = "md",
   className,
 }: ScoreGaugeProps) {
+  const reduceMotion = useReducedMotion();
   const pct = Math.max(0, Math.min(1, score));
   const conf = Math.max(0, Math.min(1, confidence));
   const barColor = getScoreColor(pct);
+  const scorePct = Math.round(pct * 100);
 
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -53,7 +59,10 @@ export function ScoreGauge({
             <p className="text-xs text-slate-500 truncate font-mono">{sublabel}</p>
           )}
         </div>
-        <span
+        {/* Score number tweens between values rather than snapping */}
+        <AnimatedNumber
+          value={pct}
+          format={formatScore}
           className={cn(
             "flex-shrink-0 font-mono font-semibold tabular-nums",
             size === "sm" && "text-sm",
@@ -67,39 +76,57 @@ export function ScoreGauge({
               ? "text-amber-400"
               : "text-slate-400"
           )}
-          aria-label={`Score: ${formatScore(pct)}`}
-        >
-          {formatScore(pct)}
-        </span>
+        />
       </div>
 
       {/* Score bar */}
       <div
         className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden"
         role="progressbar"
-        aria-valuenow={Math.round(pct * 100)}
+        aria-valuenow={scorePct}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={`Capability score: ${formatScore(pct)}`}
       >
-        <div
-          className={cn("h-full rounded-full transition-all duration-500", barColor)}
-          style={{ width: `${Math.round(pct * 100)}%` }}
-        />
+        {reduceMotion ? (
+          <div
+            className={cn("h-full rounded-full", barColor)}
+            style={{ width: `${scorePct}%` }}
+          />
+        ) : (
+          <motion.div
+            className={cn("h-full rounded-full", barColor)}
+            initial={false}
+            animate={{ width: `${scorePct}%` }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+          />
+        )}
       </div>
 
       {/* Confidence indicator */}
       <div className="flex items-center gap-2">
         <div className="flex-1 h-0.5 bg-slate-800/80 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-slate-600 rounded-full transition-all duration-500"
-            style={{ width: getConfidenceWidth(conf) }}
-            aria-hidden="true"
-          />
+          {reduceMotion ? (
+            <div
+              className="h-full bg-slate-600 rounded-full"
+              style={{ width: getConfidenceWidth(conf) }}
+              aria-hidden="true"
+            />
+          ) : (
+            <motion.div
+              className="h-full bg-slate-600 rounded-full"
+              initial={false}
+              animate={{ width: getConfidenceWidth(conf) }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              aria-hidden="true"
+            />
+          )}
         </div>
-        <span className="text-xs text-slate-500 font-mono flex-shrink-0 tabular-nums">
-          {Math.round(conf * 100)}% conf.
-        </span>
+        <AnimatedNumber
+          value={conf}
+          format={(v) => `${Math.round(v * 100)}% conf.`}
+          className="text-xs text-slate-500 font-mono flex-shrink-0 tabular-nums"
+        />
       </div>
     </div>
   );

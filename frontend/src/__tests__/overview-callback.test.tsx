@@ -20,6 +20,7 @@ describe("OverviewView Callback Feedback and URL Sanitization", () => {
       token: "test.token",
       user: null,
       developer: mockDeveloper as any,
+      isAuthenticated: true,
       loading: false,
       error: null,
       isConfigured: true,

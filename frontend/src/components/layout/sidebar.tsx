@@ -41,7 +41,7 @@ function WordMark({ collapsed }: { collapsed: boolean }) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2.5 px-4 py-4 border-b border-slate-800/60",
+        "flex items-center gap-2.5 px-4 py-4 border-b border-slate-200/80 dark:border-slate-800/60 transition-colors",
         collapsed ? "justify-center" : "justify-between"
       )}
     >
@@ -51,10 +51,10 @@ function WordMark({ collapsed }: { collapsed: boolean }) {
           className="flex-shrink-0 h-7 w-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center"
           aria-hidden="true"
         >
-          <GitBranch className="h-3.5 w-3.5 text-cyan-400" />
+          <GitBranch className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400" />
         </div>
         {!collapsed && (
-          <span className="text-sm font-bold text-slate-100 tracking-tight select-none">
+          <span className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight select-none">
             DevTwin
           </span>
         )}
@@ -82,8 +82,8 @@ function NavLink({
         "text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60",
         collapsed && "justify-center px-2",
         isActive
-          ? "bg-cyan-500/12 text-cyan-400 border border-cyan-500/25"
-          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+          ? "bg-cyan-500/12 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 font-semibold"
+          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 border border-transparent"
       )}
       aria-current={isActive ? "page" : undefined}
     >
@@ -91,7 +91,7 @@ function NavLink({
         className={cn(
           "flex-shrink-0 transition-colors",
           collapsed ? "h-4.5 w-4.5" : "h-4 w-4",
-          isActive ? "text-cyan-400" : "text-slate-500 group-hover:text-slate-300"
+          isActive ? "text-cyan-600 dark:text-cyan-400" : "text-slate-400 dark:text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300"
         )}
         aria-hidden="true"
       />
@@ -106,7 +106,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex flex-col h-full bg-[#0b1120] border-r border-slate-800/60 transition-all duration-200",
+        "flex flex-col h-full bg-white dark:bg-[#0b1120] border-r border-slate-200/80 dark:border-slate-800/60 transition-all duration-200",
         collapsed ? "w-14" : "w-56"
       )}
       aria-label="Main navigation"
@@ -124,12 +124,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* Collapse toggle */}
-      <div className="border-t border-slate-800/60 px-2 py-2">
+      <div className="border-t border-slate-200/80 dark:border-slate-800/60 px-2 py-2">
         <button
           onClick={onToggle}
           className={cn(
             "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-500",
-            "hover:text-slate-300 hover:bg-slate-800/50 transition-all focus-visible:outline-none",
+            "hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800/50 transition-all focus-visible:outline-none",
             "focus-visible:ring-2 focus-visible:ring-cyan-500/60",
             collapsed && "justify-center"
           )}

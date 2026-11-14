@@ -19,6 +19,8 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/empty-state";
 import { GitBranch, KeyRound, Loader2, Shield } from "lucide-react";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { AuthMotifIllustration } from "@/components/marketing/illustrations";
 
 export type AuthPageMode = "login" | "signup";
 
@@ -102,32 +104,44 @@ export function AuthPage({ mode }: { mode: AuthPageMode }) {
   // does (redirect in flight), avoid flashing the auth form.
   if (loading || token) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-[#090d16]">
-        <Loader2 className="h-6 w-6 animate-spin text-cyan-400" aria-hidden="true" />
+      <div className="flex min-h-screen w-full items-center justify-center bg-white dark:bg-[#090d16]">
+        <Loader2 className="h-6 w-6 animate-spin text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-[#090d16] px-4 py-12">
-      <div className="w-full max-w-md rounded-xl border border-slate-800 bg-[#0d1526] shadow-2xl shadow-black/60 overflow-hidden">
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-white px-4 py-12 dark:bg-[#090d16]">
+      {/* Ambient background motif, purely decorative */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="tech-grid absolute inset-0 opacity-[0.35] dark:opacity-100" />
+        <div className="absolute left-1/2 top-1/3 h-[480px] w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/15 blur-3xl dark:bg-cyan-500/10" />
+        <AuthMotifIllustration className="absolute -left-8 bottom-0 h-56 w-56 text-cyan-600/40 dark:text-cyan-400/25 md:h-72 md:w-72" />
+        <AuthMotifIllustration className="absolute -right-10 top-0 h-56 w-56 scale-x-[-1] text-cyan-600/30 dark:text-cyan-400/20 md:h-72 md:w-72" />
+      </div>
+
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
+
+      <div className="w-full max-w-md rounded-xl border border-slate-200/70 bg-white/80 shadow-2xl shadow-slate-900/10 backdrop-blur-xl overflow-hidden dark:border-slate-800 dark:bg-[#0d1526]/90 dark:shadow-black/60">
         {/* Header */}
-        <div className="flex items-center gap-2.5 px-6 py-5 border-b border-slate-800/80 bg-slate-900/40">
+        <div className="flex items-center gap-2.5 px-6 py-5 border-b border-slate-200/70 bg-slate-50/60 dark:border-slate-800/80 dark:bg-slate-900/40">
           <Link href="/" className="flex items-center gap-2.5" aria-label="DevTwin home">
             <div className="h-7 w-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center">
-              <GitBranch className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />
+              <GitBranch className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
             </div>
-            <span className="text-sm font-bold text-slate-100 tracking-tight">DevTwin</span>
+            <span className="text-sm font-bold text-slate-900 tracking-tight dark:text-slate-100">DevTwin</span>
           </Link>
         </div>
 
         <div className="p-6 space-y-5">
           <div className="space-y-1.5">
-            <h1 id={titleId} className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-              <Shield className="h-4 w-4 text-cyan-400" aria-hidden="true" />
+            <h1 id={titleId} className="text-lg font-semibold text-slate-900 flex items-center gap-2 dark:text-slate-100">
+              <Shield className="h-4 w-4 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
               {copy.title}
             </h1>
-            <p className="text-sm text-slate-400 leading-relaxed">{copy.subtitle}</p>
+            <p className="text-sm text-slate-600 leading-relaxed dark:text-slate-400">{copy.subtitle}</p>
           </div>
 
           {errorMessage && <InlineError message={errorMessage} />}
@@ -175,7 +189,7 @@ export function AuthPage({ mode }: { mode: AuthPageMode }) {
 
           <p className="text-xs text-slate-500 text-center">
             {copy.switchLabel}{" "}
-            <Link href={copy.switchHref} className="text-cyan-400 hover:text-cyan-300 font-medium">
+            <Link href={copy.switchHref} className="text-cyan-600 hover:text-cyan-700 font-medium dark:text-cyan-400 dark:hover:text-cyan-300">
               {copy.switchCta}
             </Link>
           </p>
@@ -218,8 +232,8 @@ function DevTokenFallback({
         Supabase is not configured in this environment (<code className="bg-amber-950/60 px-1 py-0.5 rounded text-amber-200">NEXT_PUBLIC_SUPABASE_URL</code> /{" "}
         <code className="bg-amber-950/60 px-1 py-0.5 rounded text-amber-200">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>). Enter a developer backend token for local testing.
       </p>
-      <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-        <KeyRound className="h-3.5 w-3.5 text-slate-400" />
+      <label className="text-xs font-medium text-amber-900 dark:text-slate-300 flex items-center gap-1.5">
+        <KeyRound className="h-3.5 w-3.5 text-amber-700 dark:text-slate-400" />
         Backend Bearer Token (JWT)
       </label>
       <textarea
@@ -228,7 +242,7 @@ function DevTokenFallback({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="eyJhbGciOi..."
-        className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-700 bg-slate-900/60 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+        className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 bg-white/70 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
       />
       <Button type="submit" variant="secondary" size="sm" className="w-full justify-center">
         Set Token

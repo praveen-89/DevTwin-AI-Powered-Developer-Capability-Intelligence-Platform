@@ -32,6 +32,30 @@ test.describe("A — Authentication & Onboarding", () => {
       await expect(page).toHaveURL(/\/login$/);
       await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
     });
+
+    test("A0.3 — Regression: a stale/invalid session token must not let the (app) guard render the dashboard shell", async ({ page }) => {
+      // This is the exact regression that shipped: a bearer token present in
+      // storage (expired, revoked, or otherwise rejected by the backend)
+      // used to be enough for the (app) layout's old `!!token` check to
+      // treat the visitor as authenticated and render the full protected
+      // dashboard shell, even though the developer profile fetch that
+      // backs the header's signed-in state failed. The header showed
+      // "Sign in" while the dashboard shell rendered behind it — a real
+      // access-control bug. The guard must now require the same
+      // `isAuthenticated` (token AND a confirmed developer profile) that
+      // the header uses, so an unconfirmable token also redirects to
+      // /login instead of rendering protected content.
+      await page.goto(ROUTES.home, { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => {
+        sessionStorage.setItem("devtwin_dev_token", "stale-invalid-token-regression-test");
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(3000);
+
+      await expect(page).toHaveURL(/\/login$/);
+      // The protected dashboard shell (sidebar nav) must never have rendered.
+      await expect(page.getByRole("link", { name: "Repositories" })).not.toBeVisible();
+    });
   });
 
   test.describe("A1 — Unauthenticated states", () => {
@@ -79,6 +103,43 @@ test.describe("A — Authentication & Onboarding", () => {
       await gotoAndSettle(page, ROUTES.repositories);
       await waitForLoadComplete(page);
       await expect(page.locator("body")).toBeVisible();
+    });
+  });
+
+  test.describe("A1b — Header and route guard must agree on auth state", () => {
+    test("A1b.1 — With a backend-confirmed session, the header shows signed-in AND the dashboard shell renders together", async ({ page }) => {
+      // Mocks the developer-profile call so `isAuthenticated` (token +
+      // confirmed developer) resolves true without a live backend. Both
+      // the (app) layout guard and the Header read this same derived
+      // field, so this test fails if either one regresses back to
+      // disagreeing with the other.
+      await page.route("**/developers/me", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: "dev-uuid-agree-test",
+            auth_user_id: "auth-uuid-agree-test",
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          }),
+        })
+      );
+      await page.addInitScript(() => {
+        sessionStorage.setItem("devtwin_dev_token", "mock-confirmed-session-token");
+      });
+
+      await page.goto(ROUTES.home, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1500);
+
+      // Must still be on /dashboard — guard must not have redirected.
+      await expect(page).toHaveURL(/\/dashboard$/);
+      // Header must show the signed-in state (sign-out control), not
+      // "Sign in" / "Sign in to connect".
+      await expect(page.getByRole("button", { name: /Sign out/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Sign in$/i })).not.toBeVisible();
+      // Protected dashboard shell must be visible at the same time.
+      await expect(page.getByRole("link", { name: "Repositories" })).toBeVisible();
     });
   });
 

@@ -16,6 +16,7 @@ function mockAuth(overrides: Partial<AuthContextModule.AuthState> = {}) {
     token: null,
     user: null,
     developer: null,
+    isAuthenticated: false,
     loading: false,
     error: null,
     isConfigured: true,

@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" width="100%" height="100%" fill="none">
+  <defs>
+    <style>
+      :root {
+        --bg-grad-start: #f8fafc;
+        --bg-grad-end: #f1f5f9;
+        --card-bg: rgba(255, 255, 255, 0.95);
+        --text-primary: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --grid-line: rgba(15, 23, 42, 0.04);
+        --accent: #0284c7;
+        --emerald: #059669;
+        --purple: #7c3aed;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-grad-start: #090d16;
+          --bg-grad-end: #0f172a;
+          --card-bg: rgba(15, 23, 42, 0.9);
+          --text-primary: #f8fafc;
+          --text-muted: #94a3b8;
+          --border-color: #1e293b;
+          --grid-line: rgba(255, 255, 255, 0.04);
+          --accent: #06b6d4;
+          --emerald: #10b981;
+          --purple: #a855f7;
+        }
+      }
+    </style>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--bg-grad-start)" />
+      <stop offset="100%" stop-color="var(--bg-grad-end)" />
+    </linearGradient>
+    <pattern id="techGrid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M 30 0 L 0 0 0 30" fill="none" stroke="var(--grid-line)" stroke-width="1" />
+    </pattern>
+  </defs>
+
+  <rect width="800" height="360" rx="16" fill="url(#bgGrad)" stroke="var(--border-color)" stroke-width="1.5" />
+  <rect width="800" height="360" rx="16" fill="url(#techGrid)" />
+
+  <!-- Center Content -->
+  <g transform="translate(60, 60)">
+    <rect width="170" height="26" rx="13" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="1" />
+    <circle cx="14" cy="13" r="4" fill="var(--accent)" />
+    <text x="26" y="17" fill="var(--accent)" font-family="system-ui, sans-serif" font-size="11" font-weight="600">8-STAGE PIPELINE</text>
+
+    <text x="0" y="65" fill="var(--text-primary)" font-family="system-ui, sans-serif" font-size="32" font-weight="800" letter-spacing="-0.5">
+      The Actual Intelligence Pipeline
+    </text>
+
+    <text x="0" y="98" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="14">
+      An automated, asynchronous processing engine that extracts, contextualizes,
+    </text>
+    <text x="0" y="118" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="14">
+      and scores engineering characteristics with zero artificial inflation.
+    </text>
+  </g>
+
+  <!-- Pipeline Stepper Track -->
+  <g transform="translate(60, 220)">
+    <line x1="20" y1="30" x2="660" y2="30" stroke="var(--border-color)" stroke-width="3" />
+    
+    <!-- Stages 1 to 8 -->
+    <g transform="translate(20, 30)">
+      <circle cx="0" cy="0" r="14" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="var(--accent)" font-family="ui-monospace, monospace" font-size="10" font-weight="700">1</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="10">Queue</text>
+    </g>
+    <g transform="translate(110, 30)">
+      <circle cx="0" cy="0" r="14" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="var(--accent)" font-family="ui-monospace, monospace" font-size="10" font-weight="700">2</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="10">Fetch</text>
+    </g>
+    <g transform="translate(200, 30)">
+      <circle cx="0" cy="0" r="14" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="var(--accent)" font-family="ui-monospace, monospace" font-size="10" font-weight="700">3</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="10">Mine</text>
+    </g>
+    <g transform="translate(290, 30)">
+      <circle cx="0" cy="0" r="14" fill="var(--card-bg)" stroke="var(--purple)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="var(--purple)" font-family="ui-monospace, monospace" font-size="10" font-weight="700">4</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="10">Graph</text>
+    </g>
+    <g transform="translate(380, 30)">
+      <circle cx="0" cy="0" r="14" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="var(--accent)" font-family="ui-monospace, monospace" font-size="10" font-weight="700">5</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="10">Risk</text>
+    </g>
+    <g transform="translate(470, 30)">
+      <circle cx="0" cy="0" r="14" fill="var(--card-bg)" stroke="var(--emerald)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="var(--emerald)" font-family="ui-monospace, monospace" font-size="10" font-weight="700">6</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="10">Evidence</text>
+    </g>
+    <g transform="translate(560, 30)">
+      <circle cx="0" cy="0" r="14" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="var(--accent)" font-family="ui-monospace, monospace" font-size="10" font-weight="700">7</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--text-muted)" font-family="system-ui, sans-serif" font-size="10">Capability</text>
+    </g>
+    <g transform="translate(650, 30)">
+      <circle cx="0" cy="0" r="15" fill="var(--emerald)" stroke="var(--card-bg)" stroke-width="2" />
+      <text x="0" y="4" text-anchor="middle" fill="#ffffff" font-family="ui-monospace, monospace" font-size="10" font-weight="700">✓</text>
+      <text x="0" y="26" text-anchor="middle" fill="var(--emerald)" font-family="system-ui, sans-serif" font-size="10" font-weight="600">Complete</text>
+    </g>
+  </g>
+</svg>
+

@@ -64,7 +64,7 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
 *   **RLS Integration**: Runtime database-level RLS integration test to authenticate as Developer A and attempt to query Developer B's data.
 
 ## Frontend Testing
-*   **Unit Tests (`vitest run`)**: 64 passed across 7 suites (Checkpoint 31 verified):
+*   **Unit Tests (`vitest run`)**: 72 passed across 8 suites (Checkpoint 32 — theme & hero banner implementation verified):
     *   `skillgraph-canvas.test.ts`: 24 tests covering node/edge filtering, search, incident connectivity, and taxonomy colors.
     *   `capability-history-chart.test.ts`: 12 tests covering chronological sorting, Recharts data mapping, and rounding.
     *   `add-repository-dialog.test.tsx`: 8 tests covering project/repo loading, search filter, create project mode, successful registration, error handling, and 409 conflict.
@@ -72,6 +72,7 @@ DevTwin relies on high-fidelity deterministic analysis. A bug in the analysis pi
     *   `auth-context.test.tsx`: 5 tests covering Supabase session restoration on mount, 404 developer auto-provisioning, `signIn` token synchronization, `signOut` clearing, and graceful unconfigured-Supabase fallback with dev-token.
     *   `overview-callback.test.tsx`: 3 tests covering `?github=success` success banner, `?github_error=access_denied` error banner, and banner dismiss + URL sanitization.
     *   `repositories-page.test.tsx`: 3 tests covering unauthenticated prompt, repository listing + Run Analysis trigger in Queued stage, and analysis job error handling.
+    *   `auth-page.test.tsx`: 8 tests covering login/signup page routing, auth modal rendering, unauthenticated redirect guards, and callback handling.
 *   **TypeScript (`npx tsc --noEmit`)**: Exit code 0, 0 type errors.
 
 ## End-to-End (E2E) Browser Testing (`npx playwright test`)
