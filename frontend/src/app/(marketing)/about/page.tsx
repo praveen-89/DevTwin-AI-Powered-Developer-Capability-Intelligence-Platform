@@ -50,9 +50,9 @@ export default function AboutPage() {
 
           {/* 4. Below this: Buttons */}
           <div className="mt-4 sm:mt-5 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/signup">
+            <Link href="/login">
               <Button variant="primary" size="md" leftIcon={<GitBranch className="h-4 w-4" />}>
-                Connect with GitHub
+                Get Started
               </Button>
             </Link>
             <Link href="/how-it-works">

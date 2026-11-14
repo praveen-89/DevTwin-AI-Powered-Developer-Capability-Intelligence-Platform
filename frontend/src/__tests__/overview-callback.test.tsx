@@ -28,6 +28,7 @@ describe("OverviewView Callback Feedback and URL Sanitization", () => {
       clearToken: vi.fn(),
       signIn: vi.fn(),
       signInWithGithub: vi.fn(),
+      signInWithGoogle: vi.fn(),
       signUp: vi.fn(),
       signOut: vi.fn(),
       refreshDeveloper: vi.fn(),

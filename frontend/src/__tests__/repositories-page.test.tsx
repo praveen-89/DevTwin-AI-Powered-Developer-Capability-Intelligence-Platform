@@ -42,6 +42,7 @@ describe("RepositoriesPage", () => {
     clearToken: vi.fn(),
     signIn: vi.fn(),
     signInWithGithub: vi.fn(),
+    signInWithGoogle: vi.fn(),
     signUp: vi.fn(),
     signOut: vi.fn(),
     refreshDeveloper: vi.fn(),

@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * DevTwin — Dedicated Login / Signup Page
+ * DevTwin — Dedicated Sign-In Page
  *
- * Shared by /login and /signup (two distinct URLs, one component with a
- * `mode` toggle, matching the AuthModal's existing sign-in/sign-up tab
- * pattern). GitHub OAuth is the primary path; Google is a visible but
- * disabled stub reserved for a later checkpoint.
+ * Single entry point for both new and returning users: GitHub and Google
+ * OAuth both auto-provision a Supabase account on first use, so there is
+ * no separate "signup" flow to confirm — and no email/password form that
+ * would let someone sign up with an unverified, possibly fake address.
  *
  * A logged-in user who lands here directly is redirected to /dashboard —
  * this page is never shown while a session already exists.
@@ -22,25 +22,6 @@ import { GitBranch, KeyRound, Loader2, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { AuthMotifIllustration } from "@/components/marketing/illustrations";
 
-export type AuthPageMode = "login" | "signup";
-
-const COPY: Record<AuthPageMode, { title: string; subtitle: string; switchLabel: string; switchHref: string; switchCta: string }> = {
-  login: {
-    title: "Sign in to DevTwin",
-    subtitle: "Continue with GitHub to resume tracking your evidence-backed capability profile.",
-    switchLabel: "New to DevTwin?",
-    switchHref: "/signup",
-    switchCta: "Create an account",
-  },
-  signup: {
-    title: "Create your DevTwin account",
-    subtitle: "Connect GitHub to start building your evidence-backed capability profile.",
-    switchLabel: "Already have an account?",
-    switchHref: "/login",
-    switchCta: "Sign in",
-  },
-};
-
 /** Maps a Supabase OAuth callback error code to a readable message. */
 function describeOAuthError(error: string | null, description: string | null): string | null {
   if (!error) return null;
@@ -50,17 +31,15 @@ function describeOAuthError(error: string | null, description: string | null): s
   return description || `Sign-in failed (${error}). Please try again.`;
 }
 
-export function AuthPage({ mode }: { mode: AuthPageMode }) {
+export function AuthPage() {
   const titleId = useId();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token, loading, isConfigured, signInWithGithub, setToken } = useAuth();
+  const { token, loading, isConfigured, signInWithGithub, signInWithGoogle, setToken } = useAuth();
 
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingProvider, setSubmittingProvider] = useState<"github" | "google" | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [devTokenInput, setDevTokenInput] = useState("");
-
-  const copy = COPY[mode];
 
   // Logged-in users should never see the auth form — send them to the dashboard.
   useEffect(() => {
@@ -80,14 +59,24 @@ export function AuthPage({ mode }: { mode: AuthPageMode }) {
 
   async function handleGithubSignIn() {
     setErrorMessage(null);
-    setSubmitting(true);
+    setSubmittingProvider("github");
     const result = await signInWithGithub();
     // A successful call redirects the browser away from this page, so we
     // only ever reach this line on failure.
     if (result.error) {
       setErrorMessage(result.error);
     }
-    setSubmitting(false);
+    setSubmittingProvider(null);
+  }
+
+  async function handleGoogleSignIn() {
+    setErrorMessage(null);
+    setSubmittingProvider("google");
+    const result = await signInWithGoogle();
+    if (result.error) {
+      setErrorMessage(result.error);
+    }
+    setSubmittingProvider(null);
   }
 
   function handleDevTokenSubmit(e: React.FormEvent) {
@@ -139,9 +128,11 @@ export function AuthPage({ mode }: { mode: AuthPageMode }) {
           <div className="space-y-1.5">
             <h1 id={titleId} className="text-lg font-semibold text-slate-900 flex items-center gap-2 dark:text-slate-100">
               <Shield className="h-4 w-4 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
-              {copy.title}
+              Sign in to DevTwin
             </h1>
-            <p className="text-sm text-slate-600 leading-relaxed dark:text-slate-400">{copy.subtitle}</p>
+            <p className="text-sm text-slate-600 leading-relaxed dark:text-slate-400">
+              Continue with GitHub or Google to access your evidence-backed capability profile. New here? The same button creates your account.
+            </p>
           </div>
 
           {errorMessage && <InlineError message={errorMessage} />}
@@ -152,7 +143,8 @@ export function AuthPage({ mode }: { mode: AuthPageMode }) {
               variant="primary"
               size="lg"
               className="w-full justify-center"
-              loading={submitting}
+              loading={submittingProvider === "github"}
+              disabled={submittingProvider === "google"}
               leftIcon={<GitBranch className="h-4 w-4" />}
               onClick={handleGithubSignIn}
               aria-label="Continue with GitHub"
@@ -160,23 +152,19 @@ export function AuthPage({ mode }: { mode: AuthPageMode }) {
               Continue with GitHub
             </Button>
 
-            <div className="relative">
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="w-full justify-center opacity-60"
-                disabled
-                aria-label="Continue with Google (coming soon)"
-                title="Google sign-in is coming soon"
-              >
-                <GoogleGlyph />
-                Continue with Google
-              </Button>
-              <span className="absolute -top-2 right-2 rounded-full border border-slate-700 bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
-                Coming soon
-              </span>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full justify-center"
+              loading={submittingProvider === "google"}
+              disabled={submittingProvider === "github"}
+              leftIcon={<GoogleGlyph />}
+              onClick={handleGoogleSignIn}
+              aria-label="Continue with Google"
+            >
+              Continue with Google
+            </Button>
           </div>
 
           {!isConfigured && (
@@ -186,13 +174,6 @@ export function AuthPage({ mode }: { mode: AuthPageMode }) {
               onSubmit={handleDevTokenSubmit}
             />
           )}
-
-          <p className="text-xs text-slate-500 text-center">
-            {copy.switchLabel}{" "}
-            <Link href={copy.switchHref} className="text-cyan-600 hover:text-cyan-700 font-medium dark:text-cyan-400 dark:hover:text-cyan-300">
-              {copy.switchCta}
-            </Link>
-          </p>
         </div>
       </div>
     </div>

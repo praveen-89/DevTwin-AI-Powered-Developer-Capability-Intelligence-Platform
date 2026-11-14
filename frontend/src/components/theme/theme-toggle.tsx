@@ -4,7 +4,7 @@
  * DevTwin — Theme Toggle
  *
  * A small three-way Light / Dark / System control used on the marketing
- * nav and the login/signup pages only. Renders a neutral placeholder
+ * nav and the login page only. Renders a neutral placeholder
  * until mounted to avoid a hydration mismatch against the theme
  * `next-themes` resolves from `localStorage` / the OS preference.
  */

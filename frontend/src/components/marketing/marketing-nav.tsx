@@ -56,9 +56,9 @@ export function MarketingNav() {
               Sign in
             </Button>
           </Link>
-          <Link href="/signup">
+          <Link href="/login">
             <Button variant="primary" size="sm">
-              Connect with GitHub
+              Get Started
             </Button>
           </Link>
         </div>
@@ -95,9 +95,9 @@ export function MarketingNav() {
                   Sign in
                 </Button>
               </Link>
-              <Link href="/signup" onClick={() => setMobileOpen(false)}>
+              <Link href="/login" onClick={() => setMobileOpen(false)}>
                 <Button variant="primary" size="sm" className="w-full justify-center">
-                  Connect with GitHub
+                  Get Started
                 </Button>
               </Link>
             </div>

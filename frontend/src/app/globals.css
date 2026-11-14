@@ -4,7 +4,7 @@
  * Class-based dark variant (next-themes toggles `.dark` on <html>).
  * Safe globally: the authenticated dashboard uses zero `dark:`-prefixed
  * utilities (hardcoded hex colors throughout), so this only affects the
- * marketing site and the login/signup pages, which are the only places
+ * marketing site and the login page, which are the only places
  * `dark:` variants are used.
  */
 @custom-variant dark (&:where(.dark, .dark *));

@@ -7,7 +7,7 @@
  * Missing or unsupported metrics are omitted rather than fabricated.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -28,6 +28,8 @@ import { EmptyState, InlineError } from "@/components/ui/empty-state";
 import { StageStepper } from "@/components/ui/stage-stepper";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { PageHeroBanner } from "@/components/layout/page-hero-banner";
+import { PageExplainer } from "@/components/dashboard/page-explainer";
+import { BreakdownChart, type BreakdownDatum } from "@/components/dashboard/breakdown-chart";
 import { cn, formatDate } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -887,6 +889,19 @@ export function OverviewView() {
     }
   }, [state.activeJob]);
 
+  const riskSeverityData: BreakdownDatum[] = useMemo(() => {
+    const counts: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    for (const r of state.risks) {
+      if (counts[r.severity] != null) counts[r.severity] += 1;
+    }
+    return [
+      { label: "Critical", value: counts.CRITICAL, color: "#f87171" },
+      { label: "High", value: counts.HIGH, color: "#fb923c" },
+      { label: "Medium", value: counts.MEDIUM, color: "#fbbf24" },
+      { label: "Low", value: counts.LOW, color: "#60a5fa" },
+    ];
+  }, [state.risks]);
+
   // ── Unauthenticated state ────────────────────────────────────────────────
   if (!token) {
     return (
@@ -964,6 +979,25 @@ export function OverviewView() {
           { label: "Findings", value: state.risks.length, variant: state.risks.length > 0 ? "warning" : "muted" },
         ]}
       />
+
+      <PageExplainer
+        pageKey="overview"
+        description="The Overview is DevTwin's front door: connect GitHub, pick a repository, run an analysis, and see a snapshot of the capability scores and risk findings it produced — the full detail for each lives on its own page."
+        terms={[
+          { term: "Analysis Pipeline", definition: "The 5 automated steps DevTwin runs over a repository: fetching its code, mining commits, building a SkillGraph, scanning for CodeRisk, then computing Capability scores." },
+          { term: "Job status", definition: "QUEUED (waiting to run), PROCESSING (running now), COMPLETED (finished successfully), or FAILED (hit an error)." },
+          { term: "Top Score / Capabilities", definition: "The highest-confidence skill, technology, or concept score (0–1) found so far for the selected repository. See the Capabilities page for how this is calculated." },
+          { term: "Findings / Severity", definition: "CodeRisk findings for the selected repository, by severity (CRITICAL/HIGH/MEDIUM/LOW). See the CodeRisk page for what each finding means." },
+        ]}
+      />
+
+      <BreakdownChart
+        title="Risk Findings by Severity (Selected Repository)"
+        data={riskSeverityData}
+        valueLabel="findings"
+        emptyMessage="No risk findings yet for this repository. Run an analysis to populate this chart."
+      />
+
       {/* Developer context bar */}
       {developer && (
         <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-800/30 border border-slate-800/60 rounded-lg px-4 py-2.5">

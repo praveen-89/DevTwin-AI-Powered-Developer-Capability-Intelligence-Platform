@@ -66,9 +66,9 @@ export default function LandingPage() {
 
               {/* 4. Below this: The buttons */}
               <div className="mt-4 sm:mt-5 flex flex-wrap items-center justify-center gap-3">
-                <Link href="/signup">
+                <Link href="/login">
                   <Button variant="primary" size="md" leftIcon={<GitBranch className="h-4 w-4" />}>
-                    Connect with GitHub
+                    Get Started
                   </Button>
                 </Link>
                 <Link href="/how-it-works">
@@ -231,9 +231,9 @@ export default function LandingPage() {
               every score traceable to its evidence.
             </p>
             <div className="mt-6 flex justify-center">
-              <Link href="/signup">
+              <Link href="/login">
                 <Button variant="primary" size="lg" leftIcon={<GitBranch className="h-4 w-4" />}>
-                  Connect with GitHub
+                  Get Started
                 </Button>
               </Link>
             </div>

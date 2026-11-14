@@ -64,6 +64,12 @@ export interface AuthState {
    * successful call never resolves because the browser navigates away.
    */
   signInWithGithub: (redirectTo?: string) => Promise<{ error: string | null }>;
+  /**
+   * Start the Supabase Google OAuth flow. Same redirect-away semantics as
+   * {@link signInWithGithub} — a non-null return value only represents a
+   * failure to *start* the redirect.
+   */
+  signInWithGoogle: (redirectTo?: string) => Promise<{ error: string | null }>;
   /** Sign out of Supabase and clear session state */
   signOut: () => Promise<void>;
   /** Re-fetch the developer profile */
@@ -369,6 +375,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase]
   );
 
+  // Sign In via Supabase Google OAuth (PKCE redirect flow)
+  const signInWithGoogle = useCallback(
+    async (redirectTo?: string): Promise<{ error: string | null }> => {
+      if (!supabase) {
+        const msg = "Supabase authentication is not configured. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.";
+        setError(msg);
+        return { error: msg };
+      }
+
+      setError(null);
+
+      try {
+        const { error: sbError } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo:
+              redirectTo ??
+              (typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined),
+          },
+        });
+
+        if (sbError) {
+          setError(sbError.message);
+          return { error: sbError.message };
+        }
+
+        // On success, Supabase redirects the browser to Google — this
+        // function does not resolve meaningfully beyond this point.
+        return { error: null };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to start Google sign-in.";
+        setError(msg);
+        return { error: msg };
+      }
+    },
+    [supabase]
+  );
+
   // Sign Out
   const signOut = useCallback(async () => {
     setLoading(true);
@@ -425,6 +469,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signInWithGithub,
+        signInWithGoogle,
         signOut,
         refreshDeveloper,
       }}

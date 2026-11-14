@@ -29,7 +29,6 @@ export function MarketingFooter() {
           <div className="flex flex-col gap-2">
             <span className="font-semibold text-slate-700 dark:text-slate-300">Account</span>
             <Link href="/login" className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-300">Sign in</Link>
-            <Link href="/signup" className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-300">Create account</Link>
           </div>
         </nav>
       </div>

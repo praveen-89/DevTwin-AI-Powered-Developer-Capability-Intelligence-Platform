@@ -4,7 +4,7 @@ import { AuthPage } from "@/components/auth/auth-page";
 
 export const metadata: Metadata = {
   title: "Sign In | DevTwin",
-  description: "Sign in to DevTwin with GitHub to view your evidence-backed capability dashboard.",
+  description: "Sign in to DevTwin with GitHub or Google to view your evidence-backed capability dashboard.",
 };
 
 // AuthPage reads useSearchParams() (for OAuth callback errors), which
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <Suspense>
-      <AuthPage mode="login" />
+      <AuthPage />
     </Suspense>
   );
 }

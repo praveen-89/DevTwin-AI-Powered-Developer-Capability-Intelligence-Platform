@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type {
@@ -12,6 +12,8 @@ import type {
 import Link from "next/link";
 import { Shell, PageContainer } from "@/components/layout/shell";
 import { PageHeroBanner } from "@/components/layout/page-hero-banner";
+import { PageExplainer } from "@/components/dashboard/page-explainer";
+import { CompositionPieChart, type BreakdownDatum } from "@/components/dashboard/breakdown-chart";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,6 +81,18 @@ export function SkillGraphView() {
 
   const totalLangBytes = graph?.languages.reduce((sum, l) => sum + l.bytes, 0) ?? 0;
 
+  const LANG_PALETTE = ["#06b6d4", "#a78bfa", "#fbbf24", "#60a5fa", "#34d399", "#fb923c", "#f472b6", "#818cf8"];
+  const languageChartData: BreakdownDatum[] = useMemo(() => {
+    if (!graph) return [];
+    return [...graph.languages]
+      .sort((a, b) => b.bytes - a.bytes)
+      .map((lang, i) => ({
+        label: lang.language,
+        value: lang.bytes,
+        color: LANG_PALETTE[i % LANG_PALETTE.length],
+      }));
+  }, [graph]);
+
   const handleSelectNodeById = (nodeId: string) => {
     if (!graph) return;
     const n = graph.nodes.find((item) => item.id === nodeId);
@@ -116,6 +130,26 @@ export function SkillGraphView() {
             { label: "Taxonomy", value: "3-Tier Grounded", variant: "success" },
           ]}
         />
+
+        <PageExplainer
+          pageKey="skillgraph"
+          description="A map of every skill, technology, and concept DevTwin detected in this repository, and how they relate to each other. Click any node in the canvas (or table) to inspect it."
+          terms={[
+            { term: "Node", definition: "A single skill, technology, or concept detected in the repository — e.g. a language, a framework, or an engineering practice." },
+            { term: "Node type", definition: "Skill, Technology, or Concept — DevTwin's 3-tier taxonomy for classifying what was found." },
+            { term: "Edge / Relation", definition: "A directed relationship between two nodes (e.g. one technology implies or requires another) — shown as an arrow connecting them." },
+            { term: "Domain / Category", definition: "A broader grouping a node belongs to, e.g. 'Backend' or 'Testing'." },
+            { term: "Language composition", definition: "What share of the repository's code (by bytes) is written in each programming language." },
+          ]}
+        />
+
+        {graph && (
+          <CompositionPieChart
+            title="Language Composition (by bytes)"
+            data={languageChartData}
+            emptyMessage="No language data detected for this repository yet."
+          />
+        )}
 
         {!token && (
           <EmptyState variant="no-github" description="Sign in to view SkillGraph data." />

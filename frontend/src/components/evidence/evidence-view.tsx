@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { EvidenceResponse } from "@/types/api";
 import { Shell, PageContainer } from "@/components/layout/shell";
 import { PageHeroBanner } from "@/components/layout/page-hero-banner";
+import { PageExplainer } from "@/components/dashboard/page-explainer";
+import { BreakdownChart, type BreakdownDatum } from "@/components/dashboard/breakdown-chart";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,24 @@ export function EvidenceView() {
     return "muted";
   }
 
+  const typeChartData: BreakdownDatum[] = useMemo(() => {
+    const counts: Record<string, number> = {
+      MENTION: 0,
+      USAGE: 0,
+      APPLIED_ENGINEERING: 0,
+      DEMONSTRATED_OUTCOME: 0,
+    };
+    for (const ev of evidence) {
+      if (counts[ev.type] != null) counts[ev.type] += 1;
+    }
+    return [
+      { label: "Mention", value: counts.MENTION, color: "#60a5fa" },
+      { label: "Usage", value: counts.USAGE, color: "#06b6d4" },
+      { label: "Applied Engineering", value: counts.APPLIED_ENGINEERING, color: "#34d399" },
+      { label: "Demonstrated Outcome", value: counts.DEMONSTRATED_OUTCOME, color: "#a78bfa" },
+    ];
+  }, [evidence]);
+
   return (
     <Shell pageTitle="Evidence">
       <PageContainer>
@@ -76,6 +96,25 @@ export function EvidenceView() {
             { label: "Provenance", value: "100% Traceable", variant: "success" },
             { label: "Polarity", value: "Weighted (+ / -)", variant: "purple" },
           ]}
+        />
+
+        <PageExplainer
+          pageKey="evidence"
+          description="Every individual observation DevTwin extracted from your code that supports (or counts against) a skill, technology, or concept. Each capability score on the Capabilities page is built by aggregating rows like these."
+          terms={[
+            { term: "Type", definition: "MENTION (referenced in passing) → USAGE (actually imported/used) → APPLIED_ENGINEERING (used with tests/rigor) → DEMONSTRATED_OUTCOME (highest tier) — how strong a signal this observation is." },
+            { term: "Polarity", definition: "Positive evidence supports the skill; negative evidence (e.g. a risk finding) counts against it." },
+            { term: "Strength", definition: "How substantial this one piece of evidence is on its own (0–1)." },
+            { term: "Directness", definition: "How directly this observation demonstrates the skill, versus being incidental (0–1)." },
+            { term: "Date / Recency", definition: "When this evidence was observed. Older evidence counts for less — its weight decays with a 365-day half-life." },
+          ]}
+        />
+
+        <BreakdownChart
+          title="Evidence by Type"
+          data={typeChartData}
+          valueLabel="items"
+          emptyMessage="No evidence yet. Run an analysis to populate this chart."
         />
 
         {/* Type filter */}

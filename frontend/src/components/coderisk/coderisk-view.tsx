@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { RiskFindingResponse, RepositoryResponse } from "@/types/api";
 import { Shell, PageContainer } from "@/components/layout/shell";
 import { PageHeroBanner } from "@/components/layout/page-hero-banner";
+import { PageExplainer } from "@/components/dashboard/page-explainer";
+import { BreakdownChart, type BreakdownDatum } from "@/components/dashboard/breakdown-chart";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, SeverityBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,16 @@ export function CodeRiskView() {
     return acc;
   }, {});
 
+  const severityChartData: BreakdownDatum[] = useMemo(
+    () => [
+      { label: "Critical", value: counts.CRITICAL ?? 0, color: "#f87171" },
+      { label: "High", value: counts.HIGH ?? 0, color: "#fb923c" },
+      { label: "Medium", value: counts.MEDIUM ?? 0, color: "#fbbf24" },
+      { label: "Low", value: counts.LOW ?? 0, color: "#60a5fa" },
+    ],
+    [counts.CRITICAL, counts.HIGH, counts.MEDIUM, counts.LOW]
+  );
+
   return (
     <Shell pageTitle="CodeRisk">
       <PageContainer>
@@ -81,6 +93,24 @@ export function CodeRiskView() {
             { label: "Active Findings", value: total, variant: total > 0 ? "warning" : "success" },
             { label: "Principle", value: "Risk ≠ Competence", variant: "purple" },
           ]}
+        />
+
+        <PageExplainer
+          pageKey="coderisk"
+          description="Static analysis findings for the selected repository — patterns like hardcoded secrets, missing tests, or risky dependencies. These feed negative evidence into capability scoring; they are a signal about the code, not a verdict on the developer."
+          terms={[
+            { term: "Severity", definition: "CRITICAL / HIGH / MEDIUM / LOW — how serious the finding is, from DevTwin's static rule catalog." },
+            { term: "Category", definition: "The kind of risk: SECURITY, RELIABILITY, TESTING, MAINTAINABILITY, DEPENDENCY, or ARCHITECTURE." },
+            { term: "Confidence", definition: "How sure the static rule is that this is a real issue (0–100%) — not a judgment of the developer's skill." },
+            { term: "Risk ≠ Competence", definition: "A risk finding lowers a specific capability's score slightly as negative evidence; it never implies the developer is incompetent." },
+          ]}
+        />
+
+        <BreakdownChart
+          title="Findings by Severity (Selected Repository)"
+          data={severityChartData}
+          valueLabel="findings"
+          emptyMessage="No risk findings yet for this repository. Run an analysis to populate this chart."
         />
 
         {!token && <EmptyState description="Sign in to view CodeRisk findings." />}

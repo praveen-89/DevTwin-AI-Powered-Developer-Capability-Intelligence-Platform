@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { RepositoryResponse, AnalysisJobResponse, AnalysisRunResponse, AnalysisRunStatus } from "@/types/api";
 import { Shell, PageContainer } from "@/components/layout/shell";
 import { PageHeroBanner } from "@/components/layout/page-hero-banner";
+import { PageExplainer } from "@/components/dashboard/page-explainer";
+import { BreakdownChart, type BreakdownDatum } from "@/components/dashboard/breakdown-chart";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +65,18 @@ export function RepositoriesView() {
 
   const selectedRepo = repos.find((r) => r.id === selectedId);
 
+  const visibilityData: BreakdownDatum[] = useMemo(() => {
+    const counts = { public: 0, private: 0 };
+    for (const r of repos) {
+      if (r.visibility === "private") counts.private += 1;
+      else counts.public += 1;
+    }
+    return [
+      { label: "Public", value: counts.public, color: "#60a5fa" },
+      { label: "Private", value: counts.private, color: "#a78bfa" },
+    ];
+  }, [repos]);
+
   return (
     <Shell pageTitle="Repositories">
       <PageContainer>
@@ -88,6 +102,24 @@ export function RepositoriesView() {
               </Button>
             )
           }
+        />
+
+        <PageExplainer
+          pageKey="repositories"
+          description="Every GitHub repository you've registered with DevTwin, and the state of its most recent analysis run. Select one to inspect its details or start an analysis."
+          terms={[
+            { term: "Visibility", definition: "Whether the repository is public or private on GitHub." },
+            { term: "Default branch", definition: "The branch DevTwin reads from when analyzing this repository (usually main or master)." },
+            { term: "Last synced", definition: "The last time DevTwin refreshed this repository's metadata from GitHub." },
+            { term: "Pipeline stages", definition: "FETCHING → MINING → SKILL_GRAPH → CODE_RISK → CAPABILITY — the steps an analysis run moves through, shown by the stage stepper below." },
+          ]}
+        />
+
+        <BreakdownChart
+          title="Repositories by Visibility"
+          data={visibilityData}
+          valueLabel="repositories"
+          emptyMessage="No repositories registered yet."
         />
 
         {!token && (

@@ -607,6 +607,84 @@ The queue is PostgreSQL-native (using `analysis_jobs` table + polling), NOT Redi
   auth-guard fix, GitHub App install redirect fix, repository-uniqueness
   migration, and the dashboard Server/Client component split).
 
+### Checkpoint 39 — Removed `/signup`, Wired Real Google OAuth (2026-11-14)
+- **Why**: `/signup` added no real signup flow — it only offered the same
+  GitHub OAuth button as `/login` (Supabase auto-provisions an account on
+  first OAuth login regardless of URL), plus an email/password path that was
+  never wired to the UI. Keeping it implied an email-signup flow existed
+  when it didn't, and an unverified email field is an open door to fake
+  signups. Decision: one sign-in entry point (`/login`), two real OAuth
+  providers (GitHub + Google), no email/password UI.
+- Deleted `frontend/src/app/signup/page.tsx`. Redirected every marketing
+  `Link href="/signup"` (nav, footer, home/about/how-it-works CTAs) to
+  `/login`; renamed the generic "Connect with GitHub" CTA label to "Get
+  Started" since the login page now offers two providers. Removed the
+  footer's redundant "Create account" link (same destination as "Sign in").
+- `frontend/src/components/auth/auth-page.tsx`: dropped the `mode: "login" |
+  "signup"` prop and its `COPY` branching — now a single sign-in experience.
+  Enabled the previously-disabled "Continue with Google" stub by adding
+  `signInWithGoogle` to `frontend/src/lib/auth-context.tsx` (mirrors
+  `signInWithGithub`: `supabase.auth.signInWithOAuth({ provider: "google",
+  ... })`, same `/auth/callback` redirect, same failure-only return
+  semantics). Both provider buttons now track submission state
+  independently (`submittingProvider: "github" | "google" | null`).
+- **Google OAuth still needs manual external setup** before it will
+  actually authenticate end-to-end: a Google Cloud OAuth client (redirect
+  URI = Supabase's `/auth/v1/callback`) and enabling + configuring the
+  Google provider in the Supabase dashboard with that client's ID/secret.
+  Verified via the Supabase `/auth/v1/settings` endpoint with the anon key
+  that GitHub is already enabled (`external.github: true`) and signups are
+  not disabled (`disable_signup: false`) — Google was not yet enabled as of
+  this checkpoint.
+- Updated 4 test files to add a `signInWithGoogle` mock alongside existing
+  `signInWithGithub` mocks (`auth-page.test.tsx` rewritten for the
+  single-mode page and both providers; `auth-modal.test.tsx`,
+  `overview-callback.test.tsx`, `repositories-page.test.tsx` got the mock
+  added). Tests: `npx tsc --noEmit` clean, `next build` succeeded (12 routes,
+  down from 13 — `/signup` gone), 23 affected tests passing.
+
+### Checkpoint 40 — Dashboard Explainability: `PageExplainer` + Summary Charts on All 6 Pages (2026-11-14)
+- **Why**: every dashboard page (Overview, Repositories, Capabilities,
+  CodeRisk, SkillGraph, Evidence) showed raw analysis output — tables,
+  scores, graph nodes — with no explanation of what any column or term
+  meant (Directness, Polarity, Confidence, Severity, etc.). A first-time
+  user had no way to understand results without reading source code.
+- Presentation-layer only, no backend/API changes, no new data fetches —
+  every chart is computed client-side (`useMemo`) from data each page
+  already had in state.
+- New shared components: `frontend/src/components/dashboard/page-explainer.tsx`
+  (`PageExplainer` — collapsible glossary panel, expanded by default on
+  first visit then remembered per-page via `localStorage`, `motion/react`
+  height animation respecting `useReducedMotion`) and
+  `frontend/src/components/dashboard/breakdown-chart.tsx` (`BreakdownChart`,
+  a Recharts horizontal bar chart reused for severity/type/visibility
+  breakdowns; `CompositionPieChart`, reused for SkillGraph's language
+  composition).
+- Wired into all 6 views, each with its own plain-language description +
+  glossary and summary chart: Overview (risk-by-severity bar), Repositories
+  (visibility bar — a per-repo analysis-status breakdown was considered but
+  rejected: job/run data is only fetched for the *selected* repo, not all
+  of them, and fetching it for every repo would have violated the
+  no-new-API-calls constraint), Capabilities (explainer only — the existing
+  `CapabilityHistoryChart` already sits below the hero and was kept as-is),
+  CodeRisk (severity bar), SkillGraph (explainer + a new language-bytes pie
+  chart, in addition to the existing detailed language bar-list further
+  down the page), Evidence (evidence-by-type bar).
+- **Bug caught before landing**: the Overview page's `useMemo` for its risk
+  chart was initially placed after the component's early `if (!token)
+  return` / `if (state.initialLoading) return` blocks — a React
+  rules-of-hooks violation ("Rendered more hooks than during the previous
+  render"), caught by `vitest run` on `overview-callback.test.tsx` (3
+  failures), not by `tsc` or `next build` (neither type-checks hook order).
+  Fixed by moving the `useMemo` above both early returns. Lesson: hook
+  placement bugs like this only surface via actually rendering the
+  component through multiple render paths — a type-check and a production
+  build are not sufficient verification for hook-order correctness.
+- Tests: `npx tsc --noEmit` clean, `next build` succeeded (12 routes),
+  `npx vitest run --pool=forks` full suite 72/72 passing after the fix.
+- `DESIGN.md` updated with a new "Page Explainability Pattern" section
+  documenting `PageExplainer` and the summary-chart convention.
+
 ## Forbidden Behaviors
 Agents must NOT:
 - Invent requirements
@@ -617,16 +695,18 @@ Agents must NOT:
 - Claim implementation when only specification exists
 
 ## Known Limitations (Minor MVP)
-- Supabase Auth UI now covers three paths: the original in-app `AuthModal`
-  (email/password sign-in/sign-up), and dedicated `/login` + `/signup`
-  pages whose primary action is GitHub OAuth (`signInWithOAuth`) — both
-  reuse the same Supabase client singleton
-- The Supabase GitHub provider itself still needs to be enabled in the
-  Supabase console (manual step, not done from code) before GitHub
-  sign-in actually completes end-to-end
-- Google sign-in is a visibly disabled "Coming soon" stub on `/login` and
-  `/signup` — not wired to a real provider
-- When Supabase env vars are absent, the UI falls back gracefully to a dev-token textarea form (both in `AuthModal` and on `/login` / `/signup`)
+- Supabase Auth UI now covers two paths: the original in-app `AuthModal`
+  (email/password sign-in/sign-up, used elsewhere in the app) and a single
+  dedicated `/login` page whose two actions are GitHub and Google OAuth
+  (`signInWithOAuth`) — both reuse the same Supabase client singleton.
+  There is no `/signup` route — GitHub/Google OAuth auto-provisions an
+  account on first use, so login and signup are the same action (see
+  Checkpoint 39).
+- The Supabase GitHub provider is enabled and verified live (Checkpoint
+  37/39). The Google provider is wired in code (Checkpoint 39) but still
+  needs the Google Cloud OAuth client + Supabase dashboard configuration
+  done manually before it completes end-to-end — not yet confirmed live.
+- When Supabase env vars are absent, the UI falls back gracefully to a dev-token textarea form (both in `AuthModal` and on `/login`)
 - Worker process is operational and verified end-to-end; can be executed via daemon polling loop (`workers\runner.py --poll`)
 - No email/notification on analysis completion
 - No multi-developer team features

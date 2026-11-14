@@ -48,6 +48,10 @@ DevTwin should feel technical, intelligent, trustworthy, explainable, modern, an
 *   **Location**: File path and line numbers displayed as monospaced code blocks.
 *   **Evidence**: A link to the generated negative Evidence item that impacted the capability.
 
+## Page Explainability Pattern
+*   **PageExplainer**: Every authenticated dashboard page (`Overview`, `Repositories`, `Capabilities`, `CodeRisk`, `SkillGraph`, `Evidence`) has a collapsible panel directly below its hero banner (`frontend/src/components/dashboard/page-explainer.tsx`) stating in plain language what the page shows and defining every technical term/column visible on it (e.g. Strength, Directness, Polarity, Severity, Confidence). Expand/collapse state persists per page via `localStorage` (a per-viewer convenience, not synced state).
+*   **Summary Chart Below Hero**: Every dashboard page also shows a small chart immediately below its hero banner, computed client-side from data the page already fetches (no new API calls): a severity/type/visibility breakdown bar chart (`frontend/src/components/dashboard/breakdown-chart.tsx`, `BreakdownChart`), a composition pie chart for SkillGraph's language breakdown (`CompositionPieChart`, same file), or — on Capabilities — the existing score-history line chart, which already satisfies this.
+
 ## UX Principles
 *   **Explainability**: Every score must be clickable to reveal its provenance.
 *   **Evidence-First Design**: The UI must reflect that data is based on facts, not black-box LLM guessing.

@@ -11,6 +11,7 @@ import type {
 import Link from "next/link";
 import { Shell, PageContainer } from "@/components/layout/shell";
 import { PageHeroBanner } from "@/components/layout/page-hero-banner";
+import { PageExplainer } from "@/components/dashboard/page-explainer";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, ConfidenceBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,6 +123,18 @@ export function CapabilitiesView() {
             { label: "Capabilities", value: total, variant: "accent" },
             { label: "Scoring Model", value: "Sigmoid v1", variant: "purple" },
             { label: "Half-Life Decay", value: "365 Days", variant: "success" },
+          ]}
+        />
+
+        <PageExplainer
+          pageKey="capabilities"
+          description="Your evidence-backed capability scores — one per skill, technology, or concept DevTwin detected. Click any card below to see that score's history in the chart above it."
+          terms={[
+            { term: "Score", definition: "0–1: an aggregate of all evidence found for this skill/technology/concept, weighted by strength, directness, and recency. Higher means stronger demonstrated capability." },
+            { term: "Confidence", definition: "0–1: how much evidence backs the score — independent of the score itself. A high score with low confidence means strong but sparse evidence." },
+            { term: "Target type", definition: "Skill, Technology, or Concept — the three kinds of capability DevTwin tracks." },
+            { term: "Half-life decay", definition: "Evidence loses half its weight every 365 days, so recent activity matters more than old commits." },
+            { term: "Scoring version", definition: "Which version of DevTwin's scoring formula produced this snapshot — lets you compare scores fairly across algorithm updates." },
           ]}
         />
 
