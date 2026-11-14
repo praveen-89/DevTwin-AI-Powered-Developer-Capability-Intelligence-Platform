@@ -685,6 +685,55 @@ The queue is PostgreSQL-native (using `analysis_jobs` table + polling), NOT Redi
 - `DESIGN.md` updated with a new "Page Explainability Pattern" section
   documenting `PageExplainer` and the summary-chart convention.
 
+### Checkpoint 41 — Zero-Cost Deployment: Render Free Web Service + In-Process Worker, Vercel (2026-11-14)
+- **Why**: Render's free tier has no background-worker instance type, and
+  the project currently runs the backend and the analysis worker
+  (`workers/runner.py`) as two separate processes. Needed a path to deploy
+  at zero cost without losing the two-process architecture for anyone who
+  later upgrades to a paid plan.
+- Inspected `backend/app/workers/runner.py` first: `worker_loop()` is
+  already fully `async` (uses `asyncio.sleep` for its poll interval) and
+  already catches `asyncio.CancelledError` internally to exit cleanly —
+  no synchronous/blocking code, so `asyncio.create_task()` was the right
+  approach (no `asyncio.to_thread` needed).
+- Added `RUN_WORKER_IN_PROCESS: bool = False` to
+  `backend/app/core/config.py` (same explicit/fail-fast style as existing
+  settings). Default false = zero behavior change for the existing
+  two-process setup.
+- `backend/app/main.py`: replaced the previous no-op app with a
+  `lifespan` async context manager (modern FastAPI pattern — `@app.on_event`
+  was tried first but is deprecated as of this FastAPI version, so switched
+  before landing). When `RUN_WORKER_IN_PROCESS` is true, it calls the
+  existing `app.workers.runner.worker_loop()` via `asyncio.create_task` on
+  startup and does `task.cancel()` + `await task` on shutdown — the
+  worker's own job-claiming logic was not touched or duplicated.
+- New `render.yaml` Blueprint at the repo root: one `type: web`, `plan:
+  free` service; build installs `backend/requirements.txt`; start runs
+  `uvicorn app.main:app --host 0.0.0.0 --port $PORT` from `backend/`.
+  `RUN_WORKER_IN_PROCESS=true` and `PYTHON_VERSION=3.11.9` are set as real
+  (non-secret) values; every other env var from the root `.env.example` is
+  declared with `sync: false` so Render prompts for them in its dashboard
+  — nothing committed.
+- New `DEPLOYMENT.md`: the Render setup, the sleep/in-process-worker
+  trade-off, how to move to a separate paid worker later (flip
+  `RUN_WORKER_IN_PROCESS` to false + deploy `workers/runner.py` as its own
+  service — no code change), the Vercel dashboard steps (Root Directory =
+  `frontend`, the 3 `NEXT_PUBLIC_*` vars), and that Supabase needs no
+  changes.
+- New `backend/tests/test_worker_lifespan.py`: 2 smoke tests (worker
+  disabled / enabled) driving `app.router.lifespan_context(app)` directly
+  — confirms the app starts and stops cleanly in both states without
+  hanging or raising. Does not re-test worker job-claiming logic (already
+  covered by `tests/test_worker.py`).
+- Tests: full backend suite `391 passed` (389 before this checkpoint +
+  2 new), same pre-existing warnings in `test_github.py` (unrelated
+  `AsyncMock` coroutine-not-awaited warnings, not introduced by this
+  change). `render.yaml` validated as parseable YAML.
+- Not touched, per task scope: GitHub App/Supabase Auth logic, Docker (not
+  introduced), Redis (not introduced), frontend code (Vercel needs no repo
+  file).
+- Left uncommitted on request — developer commits and pushes manually.
+
 ## Forbidden Behaviors
 Agents must NOT:
 - Invent requirements

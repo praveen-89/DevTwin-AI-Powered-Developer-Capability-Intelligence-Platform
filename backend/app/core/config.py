@@ -62,6 +62,17 @@ class Settings(BaseSettings):
     # strand users on the wrong page again.
     FRONTEND_DASHBOARD_PATH: str = "/dashboard"
 
+    # ── Worker ─────────────────────────────────────────────────────
+    # When true, the FastAPI process launches the analysis worker loop
+    # as an in-process background task on startup (and cancels it on
+    # shutdown) instead of relying on a separate `workers/runner.py`
+    # process. Exists so a single free-tier web service (no background
+    # worker instance type available) can still process analysis jobs.
+    # Default false: behavior is unchanged from the original two-process
+    # deployment, which remains the default/recommended setup whenever a
+    # separate worker process is available (e.g. a paid Render worker).
+    RUN_WORKER_IN_PROCESS: bool = False
+
     model_config = SettingsConfigDict(
         env_file=(
             str(Path(__file__).resolve().parent.parent.parent / ".env"),

@@ -4,7 +4,9 @@ DevTwin Backend — Application Entry Point
 Creates and configures the FastAPI application.
 """
 
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +42,33 @@ def create_app() -> FastAPI:
     logger = logging.getLogger(__name__)
     logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
 
+    # ── In-process worker lifespan (optional) ───────────────────────
+    # Runs the existing analysis worker loop as a background asyncio task
+    # inside this same process when no separate worker process/service is
+    # available (see RUN_WORKER_IN_PROCESS in app/core/config.py). The
+    # worker's own entrypoint is reused as-is — its job-claiming logic is
+    # never duplicated here. When the flag is false (default), this is a
+    # no-op and behavior is unchanged from the original two-process setup.
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        worker_task: asyncio.Task | None = None
+        if settings.RUN_WORKER_IN_PROCESS:
+            from app.workers.runner import worker_loop
+
+            logger.info("RUN_WORKER_IN_PROCESS enabled — starting analysis worker loop in-process.")
+            worker_task = asyncio.create_task(worker_loop())
+
+        try:
+            yield
+        finally:
+            if worker_task is not None:
+                logger.info("Stopping in-process analysis worker loop.")
+                worker_task.cancel()
+                try:
+                    await worker_task
+                except asyncio.CancelledError:
+                    pass
+
     # ── FastAPI Application ─────────────────────────────────────────
     app = FastAPI(
         title=settings.APP_NAME,
@@ -49,6 +78,7 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.DEBUG else None,
         redoc_url="/redoc" if settings.DEBUG else None,
         openapi_url="/openapi.json" if settings.DEBUG else None,
+        lifespan=lifespan,
     )
 
     # ── CORS ───────────────────────────────────────────────────────

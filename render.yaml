@@ -1,0 +1,86 @@
+# DevTwin — Render Blueprint (zero-cost deployment)
+#
+# Defines a single FREE web service running the FastAPI backend. Render's
+# free tier has no background-worker instance type, so the analysis worker
+# runs IN-PROCESS inside this same web service via RUN_WORKER_IN_PROCESS
+# (see backend/app/core/config.py and backend/app/main.py's lifespan).
+#
+# Trade-off of this setup: Render's free web services sleep after a period
+# of inactivity, and the in-process worker sleeps with it — queued analysis
+# jobs only resume once an incoming request wakes the service back up. See
+# DEPLOYMENT.md for details and for how to move to a separate (paid) worker
+# service later without any code change (just set RUN_WORKER_IN_PROCESS to
+# false there and deploy workers/runner.py as its own service).
+#
+# No values here are real secrets — every credential below uses
+# `sync: false`, which tells Render to prompt for the value in its
+# dashboard instead of reading it from this committed file.
+
+services:
+  - type: web
+    name: devtwin-backend
+    runtime: python
+    plan: free
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      # Pin the Python version to match local development (backend/.venv).
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      # Runs the analysis worker loop in-process — required on the free
+      # tier, since there is no free background-worker instance type.
+      - key: RUN_WORKER_IN_PROCESS
+        value: "true"
+
+      # ── Application ──────────────────────────────────────────────
+      - key: APP_NAME
+        sync: false
+      - key: APP_VERSION
+        sync: false
+      - key: DEBUG
+        sync: false
+
+      # ── Database (Supabase PostgreSQL) ──────────────────────────
+      - key: DATABASE_URL
+        sync: false
+
+      # ── Supabase ─────────────────────────────────────────────────
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # ── Security ─────────────────────────────────────────────────
+      - key: SECRET_KEY
+        sync: false
+
+      # ── CORS & Frontend Integration ──────────────────────────────
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: FRONTEND_DASHBOARD_PATH
+        sync: false
+
+      # ── GitHub App Integration ──────────────────────────────────
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_SLUG
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_REDIRECT_URL
+        sync: false
+      - key: GITHUB_STATE_ENCRYPTION_KEY
+        sync: false
+      - key: GITHUB_STATE_TTL_SECONDS
+        sync: false
+      - key: GITHUB_API_BASE_URL
+        sync: false
