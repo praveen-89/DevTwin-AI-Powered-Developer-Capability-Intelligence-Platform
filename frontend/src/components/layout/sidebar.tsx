@@ -13,6 +13,7 @@ import {
   Server,
   ChevronLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 
 interface NavItem {
@@ -35,6 +36,9 @@ const NAV_ITEMS: NavItem[] = [
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  /** Mobile off-canvas drawer open state (ignored at md+ widths). */
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 function WordMark({ collapsed }: { collapsed: boolean }) {
@@ -67,16 +71,19 @@ function NavLink({
   item,
   collapsed,
   isActive,
+  onNavigate,
 }: {
   item: NavItem;
   collapsed: boolean;
   isActive: boolean;
+  onNavigate?: () => void;
 }) {
   const Icon = item.icon;
   return (
     <Link
       href={item.href}
       title={collapsed ? item.label : undefined}
+      onClick={onNavigate}
       className={cn(
         "group flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150",
         "text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60",
@@ -100,52 +107,85 @@ function NavLink({
   );
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside
-      className={cn(
-        "flex flex-col h-full bg-white dark:bg-[#0b1120] border-r border-slate-200/80 dark:border-slate-800/60 transition-all duration-200",
-        collapsed ? "w-14" : "w-56"
+    <>
+      {/* Mobile backdrop — tapping it closes the drawer */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
       )}
-      aria-label="Main navigation"
-    >
-      <WordMark collapsed={collapsed} />
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-        {NAV_ITEMS.map((item) => {
-          const isActive = Boolean(pathname?.startsWith(item.href));
-          return (
-            <NavLink key={item.href} item={item} collapsed={collapsed} isActive={isActive} />
-          );
-        })}
-      </nav>
+      <aside
+        className={cn(
+          "flex flex-col h-full bg-white dark:bg-[#0b1120] border-r border-slate-200/80 dark:border-slate-800/60",
+          // Mobile: fixed off-canvas drawer, slides in/out and ignores `collapsed`.
+          "fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          // Desktop (md+): static in-flow sidebar, `collapsed` controls width instead.
+          "md:static md:translate-x-0 md:transition-[width] md:duration-200",
+          collapsed ? "md:w-14" : "md:w-56"
+        )}
+        aria-label="Main navigation"
+      >
+        {/* Mobile-only close button */}
+        <div className="flex items-center justify-end px-3 py-2 border-b border-slate-200/80 dark:border-slate-800/60 md:hidden">
+          <button
+            onClick={onMobileClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
+            aria-label="Close navigation menu"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
 
-      {/* Collapse toggle */}
-      <div className="border-t border-slate-200/80 dark:border-slate-800/60 px-2 py-2">
-        <button
-          onClick={onToggle}
-          className={cn(
-            "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-500",
-            "hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800/50 transition-all focus-visible:outline-none",
-            "focus-visible:ring-2 focus-visible:ring-cyan-500/60",
-            collapsed && "justify-center"
-          )}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand" : "Collapse"}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <>
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              <span>Collapse</span>
-            </>
-          )}
-        </button>
-      </div>
-    </aside>
+        <WordMark collapsed={collapsed} />
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+          {NAV_ITEMS.map((item) => {
+            const isActive = Boolean(pathname?.startsWith(item.href));
+            return (
+              <NavLink
+                key={item.href}
+                item={item}
+                collapsed={collapsed}
+                isActive={isActive}
+                onNavigate={onMobileClose}
+              />
+            );
+          })}
+        </nav>
+
+        {/* Collapse toggle — desktop only; mobile uses the close button above */}
+        <div className="hidden md:block border-t border-slate-200/80 dark:border-slate-800/60 px-2 py-2">
+          <button
+            onClick={onToggle}
+            className={cn(
+              "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-500",
+              "hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800/50 transition-all focus-visible:outline-none",
+              "focus-visible:ring-2 focus-visible:ring-cyan-500/60",
+              collapsed && "justify-center"
+            )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

@@ -47,7 +47,7 @@ export function ScoreGauge({
         <div className="min-w-0 flex-1">
           <p
             className={cn(
-              "font-medium text-slate-200 truncate",
+              "font-medium text-slate-800 dark:text-slate-200 truncate",
               size === "sm" && "text-xs",
               size === "md" && "text-sm",
               size === "lg" && "text-base"
@@ -56,7 +56,7 @@ export function ScoreGauge({
             {label}
           </p>
           {sublabel && (
-            <p className="text-xs text-slate-500 truncate font-mono">{sublabel}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-500 truncate font-mono">{sublabel}</p>
           )}
         </div>
         {/* Score number tweens between values rather than snapping */}
@@ -69,19 +69,19 @@ export function ScoreGauge({
             size === "md" && "text-base",
             size === "lg" && "text-xl",
             pct >= 0.75
-              ? "text-emerald-400"
+              ? "text-emerald-600 dark:text-emerald-400"
               : pct >= 0.5
-              ? "text-cyan-400"
+              ? "text-cyan-600 dark:text-cyan-400"
               : pct >= 0.25
-              ? "text-amber-400"
-              : "text-slate-400"
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-slate-500 dark:text-slate-400"
           )}
         />
       </div>
 
       {/* Score bar */}
       <div
-        className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden"
+        className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden"
         role="progressbar"
         aria-valuenow={scorePct}
         aria-valuemin={0}
@@ -105,16 +105,16 @@ export function ScoreGauge({
 
       {/* Confidence indicator */}
       <div className="flex items-center gap-2">
-        <div className="flex-1 h-0.5 bg-slate-800/80 rounded-full overflow-hidden">
+        <div className="flex-1 h-0.5 bg-slate-200/80 dark:bg-slate-800/80 rounded-full overflow-hidden">
           {reduceMotion ? (
             <div
-              className="h-full bg-slate-600 rounded-full"
+              className="h-full bg-slate-400 dark:bg-slate-600 rounded-full"
               style={{ width: getConfidenceWidth(conf) }}
               aria-hidden="true"
             />
           ) : (
             <motion.div
-              className="h-full bg-slate-600 rounded-full"
+              className="h-full bg-slate-400 dark:bg-slate-600 rounded-full"
               initial={false}
               animate={{ width: getConfidenceWidth(conf) }}
               transition={{ duration: 0.6, ease: "easeOut" }}
@@ -125,7 +125,7 @@ export function ScoreGauge({
         <AnimatedNumber
           value={conf}
           format={(v) => `${Math.round(v * 100)}% conf.`}
-          className="text-xs text-slate-500 font-mono flex-shrink-0 tabular-nums"
+          className="text-xs text-slate-500 dark:text-slate-500 font-mono flex-shrink-0 tabular-nums"
         />
       </div>
     </div>
@@ -139,7 +139,13 @@ export function ScorePill({ score, className }: { score: number; className?: str
     <span
       className={cn(
         "inline-block font-mono text-xs font-semibold tabular-nums",
-        pct >= 0.75 ? "text-emerald-400" : pct >= 0.5 ? "text-cyan-400" : pct >= 0.25 ? "text-amber-400" : "text-slate-400",
+        pct >= 0.75
+          ? "text-emerald-600 dark:text-emerald-400"
+          : pct >= 0.5
+          ? "text-cyan-600 dark:text-cyan-400"
+          : pct >= 0.25
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-slate-500 dark:text-slate-400",
         className
       )}
     >

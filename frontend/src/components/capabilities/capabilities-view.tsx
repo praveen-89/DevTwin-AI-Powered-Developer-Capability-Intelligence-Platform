@@ -139,8 +139,8 @@ export function CapabilitiesView() {
         />
 
         {/* Scoping notice */}
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-xs text-amber-200">
-          <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-xs text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
           <div>
             <strong>Run-Scoped Scoring:</strong> Each capability score represents evidence from a
             single repository analysis run. Scores are plotted sequentially across historical runs
@@ -180,7 +180,7 @@ export function CapabilitiesView() {
             {/* Target Category Filter Tabs */}
             <div className="flex items-center justify-between gap-3 pt-2">
               <div
-                className="flex gap-1 p-1 bg-slate-800/40 rounded-lg w-fit"
+                className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800/40 rounded-lg w-fit"
                 role="tablist"
                 aria-label="Filter by capability type"
               >
@@ -196,8 +196,8 @@ export function CapabilitiesView() {
                     }}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${
                       filter === t
-                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30"
+                        : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                     }`}
                   >
                     {t === "all" ? "All Targets" : t}
@@ -216,7 +216,7 @@ export function CapabilitiesView() {
                 <Card key={group}>
                   <CardHeader>
                     <CardTitle as="h3" className="flex items-center gap-2">
-                      <BarChart3 className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                      <BarChart3 className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                       {group}
                     </CardTitle>
                     <Badge variant="muted">{caps.length}</Badge>
@@ -245,7 +245,7 @@ export function CapabilitiesView() {
                           className={`p-3.5 rounded-xl border transition-colors cursor-pointer ${
                             isSelected
                               ? "bg-cyan-500/10 border-cyan-500/50 shadow-md shadow-cyan-950/40"
-                              : "bg-slate-900/40 border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/30"
+                              : "bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100 dark:bg-slate-900/40 dark:border-slate-800/60 dark:hover:border-slate-700 dark:hover:bg-slate-800/30"
                           }`}
                           role="button"
                           tabIndex={0}
@@ -259,10 +259,10 @@ export function CapabilitiesView() {
                         >
                           <div className="flex items-start justify-between gap-2 mb-2">
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-100 truncate block">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate block">
                                 {cap.target.target_name}
                               </span>
-                              <span className="text-xs text-slate-400 capitalize">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 capitalize">
                                 {cap.target.target_type}
                               </span>
                             </div>
@@ -272,7 +272,7 @@ export function CapabilitiesView() {
                                   Viewing History
                                 </Badge>
                               ) : (
-                                <ChevronRight className="h-4 w-4 text-slate-600" />
+                                <ChevronRight className="h-4 w-4 text-slate-400 dark:text-slate-600" />
                               )}
                             </div>
                           </div>
@@ -284,7 +284,7 @@ export function CapabilitiesView() {
                             className="mb-2"
                           />
 
-                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/40">
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200 dark:border-slate-800/40">
                             <ConfidenceBadge confidence={cap.confidence} />
                             <span className="text-slate-500 font-mono text-[11px]">
                               {formatDate(cap.updated_at)}

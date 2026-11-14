@@ -168,8 +168,8 @@ export function SkillGraphView() {
                   onClick={() => setSelectedRepoId(repo.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
                     selectedRepoId === repo.id
-                      ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
-                      : "text-slate-400 border border-slate-700/50 hover:text-slate-200 hover:border-slate-600"
+                      ? "bg-cyan-500/15 text-cyan-700 border border-cyan-500/30 dark:text-cyan-300"
+                      : "text-slate-500 border border-slate-300/70 hover:text-slate-800 hover:border-slate-400 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:border-slate-600"
                   }`}
                 >
                   {repo.full_name}
@@ -200,7 +200,7 @@ export function SkillGraphView() {
             {!loadingGraph && graph && (
               <div className="space-y-6">
                 {/* Graph Controls Toolbar: Filter tabs, Search input, View Switcher */}
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/60">
                   {/* Category filters */}
                   <div className="flex items-center gap-1">
                     {(["ALL", "skill", "technology", "concept"] as NodeFilter[]).map((t) => (
@@ -209,8 +209,8 @@ export function SkillGraphView() {
                         onClick={() => setFilterType(t)}
                         className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${
                           filterType === t
-                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                            : "text-slate-400 hover:text-slate-200"
+                            ? "bg-cyan-500/20 text-cyan-700 border border-cyan-500/40 dark:text-cyan-300"
+                            : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                         }`}
                       >
                         {t === "ALL" ? "All Categories" : t}
@@ -222,7 +222,7 @@ export function SkillGraphView() {
                   <div className="flex items-center gap-2">
                     <div className="relative">
                       <Search
-                        className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500"
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500"
                         aria-hidden="true"
                       />
                       <input
@@ -230,21 +230,21 @@ export function SkillGraphView() {
                         placeholder="Search nodes..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-40 sm:w-48 pl-8 pr-3 py-1 text-xs rounded-lg bg-slate-800/70 border border-slate-700/60 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/60 font-mono"
+                        className="w-40 sm:w-48 pl-8 pr-3 py-1 text-xs rounded-lg bg-white border border-slate-300 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/60 font-mono dark:bg-slate-800/70 dark:border-slate-700/60 dark:text-slate-200 dark:placeholder:text-slate-500"
                         aria-label="Filter nodes by name"
                       />
                     </div>
 
                     {/* Accessible list vs canvas toggle */}
-                    <div className="flex items-center bg-slate-800/80 rounded-lg p-0.5 border border-slate-700/60">
+                    <div className="flex items-center bg-slate-200/70 dark:bg-slate-800/80 rounded-lg p-0.5 border border-slate-300/70 dark:border-slate-700/60">
                       <button
                         onClick={() => setViewMode("canvas")}
                         aria-label="Interactive Canvas View"
                         title="Canvas View"
                         className={`p-1.5 rounded-md transition-all ${
                           viewMode === "canvas"
-                            ? "bg-cyan-500/20 text-cyan-300"
-                            : "text-slate-400 hover:text-slate-200"
+                            ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                            : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                         }`}
                       >
                         <LayoutGrid className="h-3.5 w-3.5" />
@@ -255,8 +255,8 @@ export function SkillGraphView() {
                         title="Accessible Table View"
                         className={`p-1.5 rounded-md transition-all ${
                           viewMode === "list"
-                            ? "bg-cyan-500/20 text-cyan-300"
-                            : "text-slate-400 hover:text-slate-200"
+                            ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                            : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                         }`}
                       >
                         <List className="h-3.5 w-3.5" />
@@ -299,7 +299,7 @@ export function SkillGraphView() {
                           <div className="overflow-x-auto max-h-[500px]">
                             <table className="w-full text-xs" aria-label="Taxonomy nodes table">
                               <thead>
-                                <tr className="border-b border-slate-800/60 bg-slate-900/60 text-slate-400">
+                                <tr className="border-b border-slate-200 dark:border-slate-800/60 bg-slate-100 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400">
                                   <th className="text-left px-4 py-2 font-medium">Name</th>
                                   <th className="text-left px-4 py-2 font-medium">Type</th>
                                   <th className="text-left px-4 py-2 font-medium">Domain / Category</th>
@@ -321,11 +321,11 @@ export function SkillGraphView() {
                                   .map((node) => (
                                     <tr
                                       key={node.id}
-                                      className={`border-b border-slate-800/30 hover:bg-slate-800/20 transition-colors ${
+                                      className={`border-b border-slate-100 dark:border-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/20 transition-colors ${
                                         selectedNode?.id === node.id ? "bg-cyan-500/10" : ""
                                       }`}
                                     >
-                                      <td className="px-4 py-2 font-mono text-slate-200">
+                                      <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-200">
                                         {node.name}
                                       </td>
                                       <td className="px-4 py-2">
@@ -341,7 +341,7 @@ export function SkillGraphView() {
                                           {node.type}
                                         </Badge>
                                       </td>
-                                      <td className="px-4 py-2 text-slate-400">
+                                      <td className="px-4 py-2 text-slate-500 dark:text-slate-400">
                                         {node.domain_or_category || "—"}
                                       </td>
                                       <td className="px-4 py-2">
@@ -350,7 +350,7 @@ export function SkillGraphView() {
                                             setSelectedNode(node);
                                             setSelectedEdge(null);
                                           }}
-                                          className="text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                                          className="text-xs text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 underline underline-offset-2"
                                         >
                                           Inspect
                                         </button>
@@ -386,7 +386,7 @@ export function SkillGraphView() {
                   <Card>
                     <CardHeader>
                       <CardTitle as="h3" className="flex items-center gap-2">
-                        <Layers className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                        <Layers className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                         Language Composition
                       </CardTitle>
                       <Badge variant="muted">{graph.languages.length} languages</Badge>
@@ -403,12 +403,12 @@ export function SkillGraphView() {
                             return (
                               <div key={lang.language} className="space-y-1">
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-slate-200 font-mono">{lang.language}</span>
-                                  <span className="text-slate-400 tabular-nums font-mono">
+                                  <span className="text-slate-800 dark:text-slate-200 font-mono">{lang.language}</span>
+                                  <span className="text-slate-500 dark:text-slate-400 tabular-nums font-mono">
                                     {formatBytes(lang.bytes)} ({pct.toFixed(1)}%)
                                   </span>
                                 </div>
-                                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                                   <div
                                     className="h-full rounded-full bg-cyan-500/60"
                                     style={{ width: `${pct}%` }}
@@ -426,7 +426,7 @@ export function SkillGraphView() {
                   <Card>
                     <CardHeader>
                       <CardTitle as="h3" className="flex items-center gap-2">
-                        <Box className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                        <Box className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                         Dependencies Ecosystem
                       </CardTitle>
                       <Badge variant="muted">{graph.dependencies.length}</Badge>
@@ -438,16 +438,16 @@ export function SkillGraphView() {
                         {graph.dependencies.map((dep, i) => (
                           <div
                             key={i}
-                            className="flex items-center gap-2 py-1 border-b border-slate-800/30 last:border-0"
+                            className="flex items-center gap-2 py-1 border-b border-slate-100 dark:border-slate-800/30 last:border-0"
                           >
                             <Badge variant="muted" className="text-xs flex-shrink-0">
                               {dep.ecosystem}
                             </Badge>
-                            <span className="text-xs font-mono text-slate-300 truncate">
+                            <span className="text-xs font-mono text-slate-700 dark:text-slate-300 truncate">
                               {dep.package_name}
                             </span>
                             {dep.version_constraint && (
-                              <span className="text-xs text-slate-500 font-mono flex-shrink-0">
+                              <span className="text-xs text-slate-400 dark:text-slate-500 font-mono flex-shrink-0">
                                 {dep.version_constraint}
                               </span>
                             )}

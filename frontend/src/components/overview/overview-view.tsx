@@ -62,22 +62,22 @@ function FeedbackBanner({
       className={cn(
         "flex items-center justify-between gap-3 px-4 py-3 rounded-lg border text-xs sm:text-sm font-medium transition-all",
         isSuccess
-          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-          : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+          : "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300"
       )}
     >
       <div className="flex items-center gap-2.5">
         {isSuccess ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" aria-hidden="true" />
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" aria-hidden="true" />
         ) : (
-          <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" aria-hidden="true" />
+          <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 flex-shrink-0" aria-hidden="true" />
         )}
         <span>{feedback.message}</span>
       </div>
       <button
         type="button"
         onClick={onDismiss}
-        className="p-1 rounded hover:bg-slate-800/40 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none focus:ring-1 focus:ring-slate-500"
+        className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/40 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors focus:outline-none focus:ring-1 focus:ring-slate-500"
         aria-label="Dismiss message"
       >
         <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -148,7 +148,7 @@ function GitHubStatusCard({
     <Card accentBorder={connected}>
       <CardHeader>
         <CardTitle as="h3" className="flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          <GitBranch className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
           GitHub
         </CardTitle>
         {status && (
@@ -163,7 +163,7 @@ function GitHubStatusCard({
       </CardHeader>
       <CardBody>
         {!status || !connected ? (
-          <div className="text-sm text-slate-400 space-y-3">
+          <div className="text-sm text-slate-600 dark:text-slate-400 space-y-3">
             <p>
               Connect your GitHub account so DevTwin can access your repositories.
             </p>
@@ -184,7 +184,7 @@ function GitHubStatusCard({
             </Button>
           </div>
         ) : (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             GitHub App is installed and connected. Your repositories are accessible.
           </p>
         )}
@@ -215,7 +215,7 @@ function RepoSelector({
       <CardHeader className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CardTitle as="h3" className="flex items-center gap-2">
-            <Server className="h-4 w-4 text-slate-400" aria-hidden="true" />
+            <Server className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
             Repositories
           </CardTitle>
           <Badge variant="muted">{repos.length}</Badge>
@@ -258,13 +258,13 @@ function RepoSelector({
                 role="option"
                 aria-selected={selectedId === repo.id}
                 onClick={() => onSelect(repo.id)}
-                className={`w-full text-left px-5 py-3 flex items-center gap-3 transition-colors border-b border-slate-800/40 last:border-0 ${
+                className={`w-full text-left px-5 py-3 flex items-center gap-3 transition-colors border-b border-slate-100 dark:border-slate-800/40 last:border-0 ${
                   selectedId === repo.id
-                    ? "bg-cyan-500/8 text-cyan-300"
-                    : "text-slate-300 hover:bg-slate-800/40"
+                    ? "bg-cyan-500/8 text-cyan-700 dark:text-cyan-300"
+                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/40"
                 }`}
               >
-                <GitBranch className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" aria-hidden="true" />
+                <GitBranch className="h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium font-mono truncate">{repo.full_name}</p>
                   <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
@@ -309,7 +309,7 @@ function AnalysisCard({
     <Card>
       <CardHeader>
         <CardTitle as="h3" className="flex items-center gap-2">
-          <Play className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          <Play className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
           Analysis Pipeline
         </CardTitle>
         {job && <StatusBadge status={job.status} />}
@@ -323,7 +323,7 @@ function AnalysisCard({
 
       {!job && !error && (
         <CardBody>
-          <p className="text-sm text-slate-400 mb-4">
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
             No analysis job has been run for this repository. Start one to generate
             capability scores and risk findings.
           </p>
@@ -346,21 +346,21 @@ function AnalysisCard({
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
               <dt className="text-slate-500">Job status</dt>
-              <dd className="text-slate-200 font-mono">{job.status}</dd>
+              <dd className="text-slate-800 dark:text-slate-200 font-mono">{job.status}</dd>
               <dt className="text-slate-500">Attempts</dt>
-              <dd className="text-slate-200 font-mono">{job.attempt_count}</dd>
+              <dd className="text-slate-800 dark:text-slate-200 font-mono">{job.attempt_count}</dd>
               <dt className="text-slate-500">Requested</dt>
-              <dd className="text-slate-200">{formatDate(job.requested_at)}</dd>
+              <dd className="text-slate-800 dark:text-slate-200">{formatDate(job.requested_at)}</dd>
               {job.completed_at && (
                 <>
                   <dt className="text-slate-500">Completed</dt>
-                  <dd className="text-slate-200">{formatDate(job.completed_at)}</dd>
+                  <dd className="text-slate-800 dark:text-slate-200">{formatDate(job.completed_at)}</dd>
                 </>
               )}
               {run?.error_message && (
                 <>
                   <dt className="text-slate-500">Error</dt>
-                  <dd className="text-red-400 font-mono col-span-2 truncate" title={run.error_message}>
+                  <dd className="text-red-600 dark:text-red-400 font-mono col-span-2 truncate" title={run.error_message}>
                     {run.error_message}
                   </dd>
                 </>
@@ -432,8 +432,8 @@ function CapabilitiesCard({
       )}
       {capabilities.length > 0 && (
         <CardBody className="space-y-4">
-          <p className="text-xs text-slate-500 bg-amber-500/8 border border-amber-500/20 rounded-md px-3 py-2">
-            <AlertTriangle className="inline h-3 w-3 mr-1.5 text-amber-400" aria-hidden="true" />
+          <p className="text-xs text-slate-600 dark:text-slate-500 bg-amber-500/8 border border-amber-500/20 rounded-md px-3 py-2">
+            <AlertTriangle className="inline h-3 w-3 mr-1.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
             Scores are scoped to the selected repository and analysis run.
             They do not represent cumulative totals across all repositories.
           </p>
@@ -480,7 +480,7 @@ function RisksCard({
     <Card>
       <CardHeader>
         <CardTitle as="h3" className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          <AlertTriangle className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
           CodeRisk Summary
         </CardTitle>
         {total > 0 && <Badge variant="muted">{total} findings</Badge>}
@@ -508,17 +508,17 @@ function RisksCard({
                   aria-label={`${sev}: ${counts[sev]}`}
                 >
                   <SeverityBadge severity={sev} />
-                  <span className="text-sm font-mono text-slate-200">{counts[sev]}</span>
+                  <span className="text-sm font-mono text-slate-800 dark:text-slate-200">{counts[sev]}</span>
                 </div>
               ) : null
             )}
           </div>
 
           {/* Top findings table */}
-          <div className="rounded-lg border border-slate-800/50 overflow-hidden">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800/50 overflow-hidden">
             <table className="w-full text-xs" aria-label="Top risk findings">
               <thead>
-                <tr className="border-b border-slate-800/50 bg-slate-900/40">
+                <tr className="border-b border-slate-200 dark:border-slate-800/50 bg-slate-50 dark:bg-slate-900/40">
                   <th className="text-left px-3 py-2 text-slate-500 font-medium">Severity</th>
                   <th className="text-left px-3 py-2 text-slate-500 font-medium">Type</th>
                   <th className="text-left px-3 py-2 text-slate-500 font-medium hidden sm:table-cell">File</th>
@@ -526,15 +526,15 @@ function RisksCard({
               </thead>
               <tbody>
                 {risks.slice(0, 5).map((risk) => (
-                  <tr key={risk.id} className="border-b border-slate-800/30 last:border-0">
+                  <tr key={risk.id} className="border-b border-slate-100 dark:border-slate-800/30 last:border-0">
                     <td className="px-3 py-2">
                       <SeverityBadge severity={risk.severity} />
                     </td>
-                    <td className="px-3 py-2 text-slate-300 font-mono">{risk.risk_type}</td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-mono">{risk.risk_type}</td>
                     <td className="px-3 py-2 text-slate-500 hidden sm:table-cell truncate max-w-[160px]">
                       {risk.file_path ?? "—"}
                       {risk.line_start != null && (
-                        <span className="text-slate-600">:{risk.line_start}</span>
+                        <span className="text-slate-400 dark:text-slate-600">:{risk.line_start}</span>
                       )}
                     </td>
                   </tr>
@@ -914,15 +914,15 @@ export function OverviewView() {
         )}
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
           <div className="rounded-full bg-cyan-500/10 border border-cyan-500/20 p-5 mb-6">
-            <GitBranch className="h-8 w-8 text-cyan-400" aria-hidden="true" />
+            <GitBranch className="h-8 w-8 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
           </div>
-          <h2 className="text-xl font-bold text-slate-100 mb-2">Welcome to DevTwin</h2>
-          <p className="text-sm text-slate-400 max-w-sm leading-relaxed mb-6">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Welcome to DevTwin</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm leading-relaxed mb-6">
             Sign in with your DevTwin backend token to view your developer capability
             intelligence dashboard.
           </p>
-          <p className="text-xs text-slate-500 bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-3 max-w-xs">
-            Use the <strong className="text-slate-300">Sign in</strong> button in the top-right
+          <p className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg px-4 py-3 max-w-xs">
+            Use the <strong className="text-slate-700 dark:text-slate-300">Sign in</strong> button in the top-right
             corner to enter your backend JWT.
           </p>
         </div>
@@ -1000,21 +1000,21 @@ export function OverviewView() {
 
       {/* Developer context bar */}
       {developer && (
-        <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-800/30 border border-slate-800/60 rounded-lg px-4 py-2.5">
-          <div className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" aria-hidden="true" />
-          <span>Developer ID: <code className="font-mono text-slate-300">{developer.id.slice(0, 12)}…</code></span>
+        <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800/60 rounded-lg px-4 py-2.5">
+          <div className="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400 flex-shrink-0" aria-hidden="true" />
+          <span>Developer ID: <code className="font-mono text-slate-700 dark:text-slate-300">{developer.id.slice(0, 12)}…</code></span>
           {selectedRepo && (
             <>
-              <span className="text-slate-600">·</span>
+              <span className="text-slate-400 dark:text-slate-600">·</span>
               <span>
                 Repository:{" "}
-                <code className="font-mono text-slate-300">{selectedRepo.full_name}</code>
+                <code className="font-mono text-slate-700 dark:text-slate-300">{selectedRepo.full_name}</code>
               </span>
               <a
                 href={selectedRepo.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ml-auto text-slate-500 hover:text-slate-300 transition-colors"
+                className="ml-auto text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
                 aria-label="Open repository on GitHub"
               >
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />

@@ -70,11 +70,11 @@ export function EmptyState({
       )}
       role="status"
     >
-      <div className="rounded-full bg-slate-800/60 border border-slate-700/50 p-4 mb-5">
-        <Icon className="h-6 w-6 text-slate-400" aria-hidden="true" />
+      <div className="rounded-full bg-slate-100 border border-slate-200 p-4 mb-5 dark:bg-slate-800/60 dark:border-slate-700/50">
+        <Icon className="h-6 w-6 text-slate-500 dark:text-slate-400" aria-hidden="true" />
       </div>
-      <h3 className="text-sm font-semibold text-slate-200 mb-1.5">{displayTitle}</h3>
-      <p className="text-sm text-slate-400 max-w-xs leading-relaxed">{displayDesc}</p>
+      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">{displayTitle}</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">{displayDesc}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
@@ -90,8 +90,8 @@ export function InlineError({ message, className }: { message: string; className
       )}
       role="alert"
     >
-      <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
-      <p className="text-sm text-red-300">{message}</p>
+      <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+      <p className="text-sm text-red-700 dark:text-red-300">{message}</p>
     </div>
   );
 }

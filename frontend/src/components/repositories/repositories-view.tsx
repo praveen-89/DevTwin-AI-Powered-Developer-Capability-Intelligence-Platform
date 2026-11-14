@@ -130,7 +130,7 @@ export function RepositoriesView() {
         {error && <InlineError message={error} />}
 
         {!loading && repos.length === 0 && token && (
-          <div className="rounded-xl border border-slate-800 bg-[#0f172a] p-8 text-center space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0f172a] p-8 text-center space-y-4">
             <EmptyState
               variant="no-repos"
               description="No repositories registered yet. Add an accessible GitHub repository to start."
@@ -153,7 +153,7 @@ export function RepositoriesView() {
               <CardHeader className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CardTitle as="h2" className="flex items-center gap-2">
-                    <Server className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                    <Server className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                     All Repositories
                   </CardTitle>
                   <Badge variant="muted">{repos.length}</Badge>
@@ -172,18 +172,18 @@ export function RepositoriesView() {
                   <li key={repo.id}>
                     <button
                       onClick={() => setSelectedId(repo.id)}
-                      className={`w-full text-left px-4 py-3 flex items-start gap-3 border-b border-slate-800/40 last:border-0 transition-colors ${
-                        selectedId === repo.id ? "bg-cyan-500/8" : "hover:bg-slate-800/30"
+                      className={`w-full text-left px-4 py-3 flex items-start gap-3 border-b border-slate-100 dark:border-slate-800/40 last:border-0 transition-colors ${
+                        selectedId === repo.id ? "bg-cyan-500/8" : "hover:bg-slate-100 dark:hover:bg-slate-800/30"
                       }`}
                     >
-                      <GitBranch className="h-4 w-4 text-slate-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                      <GitBranch className="h-4 w-4 text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
                       <div className="min-w-0">
-                        <p className="text-sm font-mono font-medium text-slate-200 truncate">{repo.full_name}</p>
+                        <p className="text-sm font-mono font-medium text-slate-800 dark:text-slate-200 truncate">{repo.full_name}</p>
                         <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                           {repo.visibility === "private" ? <Lock className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
                           {repo.visibility} · {repo.default_branch}
                         </p>
-                        <p className="text-xs text-slate-600 mt-0.5">Added {formatDate(repo.created_at)}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-600 mt-0.5">Added {formatDate(repo.created_at)}</p>
                       </div>
                     </button>
                   </li>
@@ -202,7 +202,7 @@ export function RepositoriesView() {
                         href={selectedRepo.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-cyan-400 hover:text-cyan-300"
+                        className="text-xs text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300"
                       >
                         View on GitHub ↗
                       </a>
@@ -210,17 +210,17 @@ export function RepositoriesView() {
                     <CardBody>
                       <dl className="grid grid-cols-2 gap-3 text-xs">
                         <dt className="text-slate-500">Repository ID</dt>
-                        <dd className="font-mono text-slate-300">{selectedRepo.id}</dd>
+                        <dd className="font-mono text-slate-700 dark:text-slate-300">{selectedRepo.id}</dd>
                         <dt className="text-slate-500">GitHub Repo ID</dt>
-                        <dd className="font-mono text-slate-300">{selectedRepo.github_repo_id}</dd>
+                        <dd className="font-mono text-slate-700 dark:text-slate-300">{selectedRepo.github_repo_id}</dd>
                         <dt className="text-slate-500">Default branch</dt>
-                        <dd className="font-mono text-slate-300">{selectedRepo.default_branch}</dd>
+                        <dd className="font-mono text-slate-700 dark:text-slate-300">{selectedRepo.default_branch}</dd>
                         <dt className="text-slate-500">Visibility</dt>
-                        <dd className="text-slate-300">{selectedRepo.visibility}</dd>
+                        <dd className="text-slate-700 dark:text-slate-300">{selectedRepo.visibility}</dd>
                         {selectedRepo.synced_at && (
                           <>
                             <dt className="text-slate-500">Last synced</dt>
-                            <dd className="text-slate-300">{formatDate(selectedRepo.synced_at)}</dd>
+                            <dd className="text-slate-700 dark:text-slate-300">{formatDate(selectedRepo.synced_at)}</dd>
                           </>
                         )}
                       </dl>
@@ -246,7 +246,7 @@ export function RepositoriesView() {
                           }
                         />
                         {runs[selectedRepo.id]?.error_message && (
-                          <p className="text-xs text-red-400 font-mono">
+                          <p className="text-xs text-red-600 dark:text-red-400 font-mono">
                             {runs[selectedRepo.id]!.error_message}
                           </p>
                         )}
@@ -255,7 +255,7 @@ export function RepositoriesView() {
                   ) : (
                     <Card>
                       <CardBody>
-                        <p className="text-sm text-slate-400 mb-3">
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
                           No analysis has been run for this repository.
                         </p>
                         <Button

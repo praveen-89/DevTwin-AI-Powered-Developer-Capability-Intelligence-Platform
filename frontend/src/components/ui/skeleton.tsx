@@ -11,7 +11,7 @@ export function Skeleton({ shape = "rect", className, ...props }: SkeletonProps)
       role="status"
       aria-label="Loading…"
       className={cn(
-        "animate-pulse bg-slate-800/70",
+        "animate-pulse bg-slate-200 dark:bg-slate-800/70",
         shape === "line" && "h-4 rounded-md",
         shape === "rect" && "rounded-xl",
         shape === "circle" && "rounded-full",
@@ -25,8 +25,8 @@ export function Skeleton({ shape = "rect", className, ...props }: SkeletonProps)
 /** A pre-built skeleton for a card with a header and a few body lines */
 export function CardSkeleton({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="rounded-xl border border-slate-800/60 bg-[#0f172a] overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-800/60 flex items-center gap-3">
+    <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800/60 dark:bg-[#0f172a] overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800/60 flex items-center gap-3">
         <Skeleton shape="circle" className="h-5 w-5" />
         <Skeleton shape="line" className="w-32" />
       </div>

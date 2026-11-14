@@ -16,13 +16,13 @@ const variantStyles: Record<ButtonVariant, string> = {
   primary:
     "bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold border-transparent focus-visible:ring-cyan-400",
   secondary:
-    "bg-slate-700/60 hover:bg-slate-700 text-slate-200 border-slate-600/50 hover:border-slate-500 focus-visible:ring-slate-400",
+    "bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300/80 hover:border-slate-400 focus-visible:ring-slate-400 dark:bg-slate-700/60 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-600/50 dark:hover:border-slate-500",
   ghost:
-    "bg-transparent hover:bg-slate-800/60 text-slate-300 border-transparent hover:text-slate-100 focus-visible:ring-slate-400",
+    "bg-transparent hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-transparent focus-visible:ring-slate-400 dark:hover:bg-slate-800/60 dark:text-slate-300 dark:hover:text-slate-100",
   danger:
-    "bg-red-500/15 hover:bg-red-500/25 text-red-400 border-red-500/30 hover:border-red-400/50 focus-visible:ring-red-400",
+    "bg-red-500/10 hover:bg-red-500/20 text-red-600 border-red-500/30 hover:border-red-500/50 focus-visible:ring-red-400 dark:bg-red-500/15 dark:hover:bg-red-500/25 dark:text-red-400 dark:hover:border-red-400/50",
   outline:
-    "bg-transparent border-slate-600/50 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-400 focus-visible:ring-cyan-400",
+    "bg-transparent border-slate-300/80 text-slate-600 hover:border-cyan-500/60 hover:text-cyan-600 focus-visible:ring-cyan-400 dark:border-slate-600/50 dark:text-slate-300 dark:hover:text-cyan-400",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -49,7 +49,7 @@ export function Button({
       className={cn(
         "inline-flex items-center justify-center whitespace-nowrap",
         "rounded-lg border transition-all duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d16]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#090d16]",
         "disabled:opacity-50 disabled:pointer-events-none",
         variantStyles[variant],
         sizeStyles[size],

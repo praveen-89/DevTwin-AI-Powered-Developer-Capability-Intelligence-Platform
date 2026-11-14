@@ -16,6 +16,7 @@ import {
 import { BarChart3 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/card";
 import { useReducedMotion } from "motion/react";
+import { useTheme } from "next-themes";
 
 export interface BreakdownDatum {
   label: string;
@@ -34,6 +35,22 @@ interface BreakdownChartProps {
   className?: string;
 }
 
+/** Theme-aware stroke/fill colors for Recharts elements, which take literal
+ *  color strings and can't use Tailwind's `dark:` modifier directly. */
+function useChartColors() {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme !== "light";
+  return {
+    isDark,
+    gridStroke: isDark ? "#1e293b" : "#e2e8f0",
+    axisStroke: isDark ? "#64748b" : "#94a3b8",
+    tooltipBg: isDark ? "#0b1120" : "#ffffff",
+    tooltipBorder: isDark ? "#334155b3" : "#e2e8f0",
+    cellStroke: isDark ? "#090d16" : "#ffffff",
+    legendText: isDark ? "#94a3b8" : "#475569",
+  };
+}
+
 /** Horizontal bar chart summarizing counts by category — reused across dashboard pages. */
 export function BreakdownChart({
   title,
@@ -45,19 +62,20 @@ export function BreakdownChart({
 }: BreakdownChartProps) {
   const reduceMotion = useReducedMotion();
   const hasData = data.some((d) => d.value > 0);
+  const { gridStroke, axisStroke, tooltipBg, tooltipBorder } = useChartColors();
 
   return (
     <Card className={className}>
       <CardHeader>
         <CardTitle as="h3" className="flex items-center gap-2">
-          {icon ?? <BarChart3 className="h-4 w-4 text-slate-400" aria-hidden="true" />}
+          {icon ?? <BarChart3 className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />}
           {title}
         </CardTitle>
       </CardHeader>
       <CardBody>
         {!hasData ? (
           <div className="h-40 flex items-center justify-center text-center">
-            <p className="text-xs text-slate-500 max-w-xs">{emptyMessage}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-500 max-w-xs">{emptyMessage}</p>
           </div>
         ) : (
           <div className="h-56 w-full">
@@ -67,12 +85,12 @@ export function BreakdownChart({
                 layout="vertical"
                 margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                <XAxis type="number" stroke="#64748b" fontSize={11} fontFamily="monospace" allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+                <XAxis type="number" stroke={axisStroke} fontSize={11} fontFamily="monospace" allowDecimals={false} />
                 <YAxis
                   type="category"
                   dataKey="label"
-                  stroke="#64748b"
+                  stroke={axisStroke}
                   fontSize={11}
                   fontFamily="monospace"
                   width={110}
@@ -83,11 +101,14 @@ export function BreakdownChart({
                     if (!active || !payload || !payload.length) return null;
                     const d = payload[0].payload as BreakdownDatum;
                     return (
-                      <div className="rounded-lg bg-[#0b1120] border border-slate-700/80 p-2.5 shadow-xl text-xs backdrop-blur-md">
-                        <span className="text-slate-300 font-semibold">{d.label}</span>
-                        <span className="text-slate-500">: </span>
-                        <span className="font-mono text-cyan-400">{d.value}</span>
-                        <span className="text-slate-500"> {valueLabel.toLowerCase()}</span>
+                      <div
+                        className="rounded-lg p-2.5 shadow-xl text-xs backdrop-blur-md border"
+                        style={{ backgroundColor: tooltipBg, borderColor: tooltipBorder }}
+                      >
+                        <span className="text-slate-700 dark:text-slate-300 font-semibold">{d.label}</span>
+                        <span className="text-slate-400 dark:text-slate-500">: </span>
+                        <span className="font-mono text-cyan-600 dark:text-cyan-400">{d.value}</span>
+                        <span className="text-slate-400 dark:text-slate-500"> {valueLabel.toLowerCase()}</span>
                       </div>
                     );
                   }}
@@ -117,19 +138,20 @@ export function CompositionPieChart({
   const reduceMotion = useReducedMotion();
   const hasData = data.some((d) => d.value > 0);
   const total = data.reduce((sum, d) => sum + d.value, 0);
+  const { tooltipBg, tooltipBorder, cellStroke, legendText } = useChartColors();
 
   return (
     <Card className={className}>
       <CardHeader>
         <CardTitle as="h3" className="flex items-center gap-2">
-          {icon ?? <BarChart3 className="h-4 w-4 text-slate-400" aria-hidden="true" />}
+          {icon ?? <BarChart3 className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />}
           {title}
         </CardTitle>
       </CardHeader>
       <CardBody>
         {!hasData ? (
           <div className="h-40 flex items-center justify-center text-center">
-            <p className="text-xs text-slate-500 max-w-xs">{emptyMessage}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-500 max-w-xs">{emptyMessage}</p>
           </div>
         ) : (
           <div className="h-56 w-full">
@@ -148,7 +170,7 @@ export function CompositionPieChart({
                   animationDuration={600}
                 >
                   {data.map((d, i) => (
-                    <Cell key={i} fill={d.color ?? DEFAULT_COLOR} stroke="#090d16" strokeWidth={1} />
+                    <Cell key={i} fill={d.color ?? DEFAULT_COLOR} stroke={cellStroke} strokeWidth={1} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -157,16 +179,19 @@ export function CompositionPieChart({
                     const d = payload[0].payload as BreakdownDatum;
                     const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0.0";
                     return (
-                      <div className="rounded-lg bg-[#0b1120] border border-slate-700/80 p-2.5 shadow-xl text-xs backdrop-blur-md">
-                        <span className="text-slate-300 font-semibold">{d.label}</span>
-                        <span className="text-slate-500">: </span>
-                        <span className="font-mono text-cyan-400">{pct}%</span>
+                      <div
+                        className="rounded-lg p-2.5 shadow-xl text-xs backdrop-blur-md border"
+                        style={{ backgroundColor: tooltipBg, borderColor: tooltipBorder }}
+                      >
+                        <span className="text-slate-700 dark:text-slate-300 font-semibold">{d.label}</span>
+                        <span className="text-slate-400 dark:text-slate-500">: </span>
+                        <span className="font-mono text-cyan-600 dark:text-cyan-400">{pct}%</span>
                       </div>
                     );
                   }}
                 />
                 <Legend
-                  wrapperStyle={{ fontSize: 11, fontFamily: "monospace", color: "#94a3b8" }}
+                  wrapperStyle={{ fontSize: 11, fontFamily: "monospace", color: legendText }}
                   iconSize={8}
                 />
               </PieChart>

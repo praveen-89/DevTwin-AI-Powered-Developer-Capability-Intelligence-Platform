@@ -13,24 +13,27 @@ interface ShellProps {
 
 export function Shell({ pageTitle, children, className }: ShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#090d16] dark:text-slate-100 transition-colors">
-      {/* Sidebar */}
+      {/* Sidebar — static on desktop, off-canvas drawer on mobile */}
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((v) => !v)}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
       />
 
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header pageTitle={pageTitle} />
+        <Header pageTitle={pageTitle} onMenuClick={() => setMobileNavOpen(true)} />
 
         {/* Scrollable page content */}
         <main
           className={cn(
             "flex-1 overflow-y-auto overflow-x-hidden",
-            "px-5 py-6 md:px-8 md:py-8",
+            "px-4 py-5 sm:px-5 sm:py-6 md:px-8 md:py-8",
             className
           )}
           id="main-content"

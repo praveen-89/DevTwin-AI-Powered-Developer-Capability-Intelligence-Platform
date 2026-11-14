@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ChevronDown, HelpCircle } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 
@@ -40,7 +39,6 @@ function persistExpanded(pageKey: string, expanded: boolean) {
 }
 
 export function PageExplainer({ pageKey, description, terms, className }: PageExplainerProps) {
-  const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(true);
   const [hydrated, setHydrated] = useState(false);
 
@@ -55,6 +53,13 @@ export function PageExplainer({ pageKey, description, terms, className }: PageEx
     persistExpanded(pageKey, next);
   }
 
+  // Pure-CSS collapsible (grid-template-rows 0fr/1fr trick) instead of a
+  // JS height animation — this page gets mounted/unmounted on every route
+  // change, and an in-flight framer-motion height animation racing an
+  // abrupt Next.js route-level unmount is what was crashing with
+  // "Cannot read properties of null (reading 'notify')" on navigation.
+  const showBody = hydrated && expanded;
+
   return (
     <Card className={className}>
       <button
@@ -65,10 +70,10 @@ export function PageExplainer({ pageKey, description, terms, className }: PageEx
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="rounded-lg bg-cyan-500/10 p-1.5 border border-cyan-500/20 flex-shrink-0">
-            <HelpCircle className="h-4 w-4 text-cyan-400" aria-hidden="true" />
+            <HelpCircle className="h-4 w-4 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-100">What am I looking at?</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">What am I looking at?</p>
             {!expanded && (
               <p className="text-xs text-slate-500 truncate">{description}</p>
             )}
@@ -80,32 +85,27 @@ export function PageExplainer({ pageKey, description, terms, className }: PageEx
         />
       </button>
 
-      <AnimatePresence initial={false}>
-        {expanded && hydrated && (
-          <motion.div
-            initial={reduceMotion ? undefined : { height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={reduceMotion ? undefined : { height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="overflow-hidden"
-          >
-            <CardBody className="pt-0 space-y-4">
-              <p className="text-sm text-slate-400 leading-relaxed">{description}</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {terms.map((t) => (
-                  <div
-                    key={t.term}
-                    className="rounded-lg border border-slate-800/60 bg-slate-900/40 px-3 py-2.5"
-                  >
-                    <p className="text-xs font-mono font-semibold text-cyan-400">{t.term}</p>
-                    <p className="mt-1 text-xs text-slate-400 leading-relaxed">{t.definition}</p>
-                  </div>
-                ))}
-              </div>
-            </CardBody>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: showBody ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden min-h-0">
+          <CardBody className="pt-0 space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{description}</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {terms.map((t) => (
+                <div
+                  key={t.term}
+                  className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800/60 dark:bg-slate-900/40 px-3 py-2.5"
+                >
+                  <p className="text-xs font-mono font-semibold text-cyan-700 dark:text-cyan-400">{t.term}</p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{t.definition}</p>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </div>
+      </div>
     </Card>
   );
 }

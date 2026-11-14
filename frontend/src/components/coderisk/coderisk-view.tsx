@@ -128,8 +128,8 @@ export function CodeRiskView() {
                   <li key={repo.id}>
                     <button
                       onClick={() => setSelectedRepoId(repo.id)}
-                      className={`w-full text-left px-4 py-2.5 text-xs font-mono border-b border-slate-800/40 last:border-0 transition-colors truncate ${
-                        selectedRepoId === repo.id ? "text-cyan-300 bg-cyan-500/8" : "text-slate-400 hover:bg-slate-800/30"
+                      className={`w-full text-left px-4 py-2.5 text-xs font-mono border-b border-slate-100 dark:border-slate-800/40 last:border-0 transition-colors truncate ${
+                        selectedRepoId === repo.id ? "text-cyan-700 dark:text-cyan-300 bg-cyan-500/8" : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/30"
                       }`}
                     >
                       {repo.full_name}
@@ -151,17 +151,17 @@ export function CodeRiskView() {
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs transition-all ${
                         severityFilter === sev
                           ? "border-cyan-500/40 bg-cyan-500/8"
-                          : "border-slate-700/50 hover:border-slate-600"
+                          : "border-slate-300/70 hover:border-slate-400 dark:border-slate-700/50 dark:hover:border-slate-600"
                       }`}
                     >
                       <SeverityBadge severity={sev} />
-                      <span className="font-mono text-slate-300">{counts[sev] ?? 0}</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">{counts[sev] ?? 0}</span>
                     </button>
                   ))}
                   {severityFilter !== "ALL" && (
                     <button
                       onClick={() => setSeverityFilter("ALL")}
-                      className="text-xs text-slate-500 hover:text-slate-300 underline"
+                      className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 underline"
                     >
                       Clear filter
                     </button>
@@ -187,14 +187,14 @@ export function CodeRiskView() {
                 <Card>
                   <CardHeader>
                     <CardTitle as="h3" className="flex items-center gap-2">
-                      <Code2 className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                      <Code2 className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                       Findings
                     </CardTitle>
                   </CardHeader>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs" aria-label="Risk findings">
                       <thead>
-                        <tr className="border-b border-slate-800/50 bg-slate-900/40">
+                        <tr className="border-b border-slate-200 dark:border-slate-800/50 bg-slate-50 dark:bg-slate-900/40">
                           <th className="text-left px-4 py-2.5 text-slate-500 font-medium">Severity</th>
                           <th className="text-left px-4 py-2.5 text-slate-500 font-medium">Category</th>
                           <th className="text-left px-4 py-2.5 text-slate-500 font-medium">Type</th>
@@ -205,22 +205,22 @@ export function CodeRiskView() {
                       </thead>
                       <tbody>
                         {risks.map((risk) => (
-                          <tr key={risk.id} className="border-b border-slate-800/30 last:border-0 hover:bg-slate-800/20 transition-colors">
+                          <tr key={risk.id} className="border-b border-slate-100 dark:border-slate-800/30 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/20 transition-colors">
                             <td className="px-4 py-2.5"><SeverityBadge severity={risk.severity} /></td>
-                            <td className="px-4 py-2.5 text-slate-400">{risk.category}</td>
-                            <td className="px-4 py-2.5 text-slate-200 font-mono">{risk.risk_type}</td>
-                            <td className="px-4 py-2.5 text-slate-300 font-mono">{Math.round(risk.confidence * 100)}%</td>
+                            <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{risk.category}</td>
+                            <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200 font-mono">{risk.risk_type}</td>
+                            <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300 font-mono">{Math.round(risk.confidence * 100)}%</td>
                             <td className="px-4 py-2.5 hidden md:table-cell">
                               {risk.file_path ? (
-                                <span className="flex items-center gap-1 text-slate-400">
+                                <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
                                   <FileText className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
                                   <span className="font-mono truncate max-w-[180px]" title={risk.file_path}>
                                     {risk.file_path}
-                                    {risk.line_start != null && <span className="text-slate-600">:{risk.line_start}</span>}
+                                    {risk.line_start != null && <span className="text-slate-400 dark:text-slate-600">:{risk.line_start}</span>}
                                   </span>
                                 </span>
                               ) : (
-                                <span className="text-slate-600">—</span>
+                                <span className="text-slate-400 dark:text-slate-600">—</span>
                               )}
                             </td>
                             <td className="px-4 py-2.5 text-slate-500 hidden lg:table-cell">{formatDate(risk.detected_at)}</td>

@@ -7,14 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { GitBranch, LogIn, LogOut, User } from "lucide-react";
+import { GitBranch, LogIn, LogOut, Menu, User } from "lucide-react";
 
 interface HeaderProps {
   pageTitle: string;
   className?: string;
+  /** When provided, shows a mobile-only hamburger button that opens the sidebar drawer. */
+  onMenuClick?: () => void;
 }
 
-export function Header({ pageTitle, className }: HeaderProps) {
+export function Header({ pageTitle, className, onMenuClick }: HeaderProps) {
   const { developer, user, isAuthenticated, loading, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -22,19 +24,28 @@ export function Header({ pageTitle, className }: HeaderProps) {
     <>
       <header
         className={cn(
-          "flex items-center justify-between h-12 px-5 border-b transition-colors",
+          "flex items-center justify-between h-12 px-3 sm:px-5 border-b transition-colors",
           "border-slate-200/80 bg-white/95 text-slate-800",
           "dark:border-slate-800/60 dark:bg-[#0b1120]/95 dark:text-slate-100 backdrop-blur-sm",
           className
         )}
       >
         {/* Page title */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {onMenuClick && (
+            <button
+              onClick={onMenuClick}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/60 md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="h-4.5 w-4.5" aria-hidden="true" />
+            </button>
+          )}
           <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{pageTitle}</h1>
         </div>
 
         {/* Right controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Theme switcher: Light / Dark / System */}
           <ThemeToggle />
 

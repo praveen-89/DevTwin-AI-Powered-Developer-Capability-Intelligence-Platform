@@ -53,7 +53,7 @@ const ICON_BY_STATE: Record<StagePillProps["state"], React.ReactNode> = {
   done: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />,
   active: <Loader2 className="h-3.5 w-3.5 text-cyan-400 animate-spin" />,
   failed: <AlertCircle className="h-3.5 w-3.5 text-red-400" />,
-  pending: <Circle className="h-3 w-3 text-slate-600" />,
+  pending: <Circle className="h-3 w-3 text-slate-400 dark:text-slate-600" />,
 };
 
 function StagePillStatic({ label, description, state, isLast }: StagePillProps) {
@@ -66,7 +66,7 @@ function StagePillStatic({ label, description, state, isLast }: StagePillProps) 
             state === "done" && "bg-emerald-500/20 border-emerald-500/50",
             state === "active" && "bg-cyan-500/20 border-cyan-500/60",
             state === "failed" && "bg-red-500/20 border-red-500/50",
-            state === "pending" && "bg-slate-800 border-slate-700"
+            state === "pending" && "bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-700"
           )}
           aria-hidden="true"
         >
@@ -77,7 +77,7 @@ function StagePillStatic({ label, description, state, isLast }: StagePillProps) 
           <div
             className={cn(
               "flex-1 h-px",
-              state === "done" ? "bg-emerald-500/40" : "bg-slate-800"
+              state === "done" ? "bg-emerald-500/40" : "bg-slate-200 dark:bg-slate-800"
             )}
             aria-hidden="true"
           />
@@ -88,10 +88,10 @@ function StagePillStatic({ label, description, state, isLast }: StagePillProps) 
         <p
           className={cn(
             "text-xs font-medium tracking-wide",
-            state === "done" && "text-emerald-400",
-            state === "active" && "text-cyan-400",
-            state === "failed" && "text-red-400",
-            state === "pending" && "text-slate-600"
+            state === "done" && "text-emerald-600 dark:text-emerald-400",
+            state === "active" && "text-cyan-600 dark:text-cyan-400",
+            state === "failed" && "text-red-600 dark:text-red-400",
+            state === "pending" && "text-slate-400 dark:text-slate-600"
           )}
         >
           {label}
@@ -116,7 +116,7 @@ function StagePillAnimated({ label, description, state, isLast }: StagePillProps
             state === "done" && "bg-emerald-500/20 border-emerald-500/50",
             state === "active" && "bg-cyan-500/20 border-cyan-500/60",
             state === "failed" && "bg-red-500/20 border-red-500/50",
-            state === "pending" && "bg-slate-800 border-slate-700"
+            state === "pending" && "bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-700"
           )}
           animate={{
             borderColor:
@@ -225,7 +225,7 @@ export function StageStepper({ currentStatus, className }: StageStepperProps) {
       </ol>
 
       {isFailed && (
-        <p className="mt-3 text-xs text-red-400 bg-red-500/8 border border-red-500/20 rounded-lg px-3 py-2">
+        <p className="mt-3 text-xs text-red-700 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-lg px-3 py-2">
           Analysis failed. Check the job details and retry.
         </p>
       )}

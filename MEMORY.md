@@ -729,10 +729,136 @@ The queue is PostgreSQL-native (using `analysis_jobs` table + polling), NOT Redi
   2 new), same pre-existing warnings in `test_github.py` (unrelated
   `AsyncMock` coroutine-not-awaited warnings, not introduced by this
   change). `render.yaml` validated as parseable YAML.
+
+### Checkpoint 42 — Fully Responsive Navigation: Mobile Bottom Tab Bar (Marketing) + Off-Canvas Drawer (Dashboard) (2026-11-14)
+- **Why**: Neither nav worked below `md`. The marketing top nav only had a
+  dropdown hamburger (not the requested mobile-app-style bottom bar), and
+  the dashboard `Sidebar` was a static always-visible flex column with no
+  responsive handling at all — it would either overflow or eat the whole
+  screen on a phone, with no hamburger to hide it.
+- `frontend/src/components/marketing/marketing-nav.tsx`: rewrote the
+  mobile behavior — removed the hamburger/dropdown entirely. Below `md`,
+  the top bar now shows only the logo, theme toggle, and "Get Started" CTA;
+  the three nav links plus a Sign-in shortcut moved into a new fixed
+  bottom tab bar (`fixed inset-x-0 bottom-0 z-40 md:hidden`, 4-column
+  grid, icon+label per tab, active-route highlighting, `env(safe-area-inset-bottom)`
+  padding for notched phones). Desktop (`md+`) nav/CTAs unchanged.
+- `frontend/src/app/(marketing)/layout.tsx`: added `pb-16 md:pb-0` to the
+  root flex container so the fixed bottom bar never overlaps page content
+  or the footer on mobile.
+- `frontend/src/components/layout/sidebar.tsx`: `Sidebar` now takes
+  `mobileOpen`/`onMobileClose` props. Below `md` it renders as a fixed
+  off-canvas drawer (`fixed inset-y-0 left-0 w-64`, slides via
+  `-translate-x-full` ↔ `translate-x-0`) with a tap-to-dismiss backdrop and
+  its own close button; clicking any nav link also closes it. At `md+` it
+  reverts to the original static in-flow column, where `collapsed` (the
+  pre-existing expand/collapse toggle) controls width exactly as before —
+  `collapsed` is now ignored on mobile, where the drawer is always
+  full-width when open.
+- `frontend/src/components/layout/header.tsx`: added an `onMenuClick`
+  prop — a hamburger button (`md:hidden`) left of the page title that
+  opens the sidebar drawer. Also tightened mobile spacing (`px-3 sm:px-5`,
+  `gap-1.5 sm:gap-2`) so the header doesn't feel cramped at phone widths.
+- `frontend/src/components/layout/shell.tsx`: added the `mobileNavOpen`
+  state that wires `Header`'s hamburger to `Sidebar`'s drawer; tightened
+  the main content area's mobile padding (`px-4 py-5 sm:px-5 sm:py-6`).
+- `PageHeroBanner` (`frontend/src/components/layout/page-hero-banner.tsx`)
+  and the dashboard glossary/chart components added in Checkpoint 40 were
+  inspected and found already fully responsive (fluid `flex-wrap`,
+  `sm:`/`md:`/`lg:` type-scale steps, `ResponsiveContainer` for charts) —
+  no changes needed there.
+- Verified: `npx tsc --noEmit` clean, `next build` succeeded (same 12
+  routes). Full `npx vitest run` = 72/72 passing. Note: running a single
+  test file in isolation (e.g. just `skillgraph-canvas.test.ts`, which
+  doesn't even import any file touched by this change) intermittently hit
+  a Vite-cache `TypeError: Cannot read properties of undefined (reading
+  'config')` at `describe()` — a pre-existing toolchain quirk, not a
+  regression from this change, since the full-suite run (the one that
+  matters) consistently passed all 72 tests both before and after.
 - Not touched, per task scope: GitHub App/Supabase Auth logic, Docker (not
   introduced), Redis (not introduced), frontend code (Vercel needs no repo
   file).
 - Left uncommitted on request — developer commits and pushes manually.
+
+### Checkpoint 43 — Light-Theme Contrast Fixes Across the Dashboard (2026-11-14)
+- **Why**: Most dashboard-page body content (`overview-view.tsx`,
+  `repositories-view.tsx`, `coderisk-view.tsx`, `evidence-view.tsx`,
+  `capabilities-view.tsx`, `capability-history-chart.tsx`,
+  `skillgraph-view.tsx`, `skillgraph-detail.tsx`, and the UI primitives
+  `button.tsx`, `badge.tsx`, `empty-state.tsx`, `score-gauge.tsx`,
+  `skeleton.tsx`, `stage-stepper.tsx`, `breakdown-chart.tsx`,
+  `page-explainer.tsx`) was originally built dark-mode-only — raw
+  `text-slate-300/400/500`, `bg-slate-800/900`, `border-slate-700/800`
+  with no `dark:` prefix. `Card` (and the layout chrome — `Sidebar`,
+  `Header`, `Shell`, `PageHeroBanner`) is theme-aware and renders white in
+  light mode, so that dark-only text/backgrounds showed as low-contrast
+  gray-on-white or stray dark boxes in light theme.
+- Added light-mode variants (and moved the original values behind `dark:`)
+  across all the files above — body text, table headers/rows, borders,
+  chips/tabs, icons, loading skeletons, the stage-stepper's pending state,
+  and badge/button variant colors.
+- Recharts elements (used in `capability-history-chart.tsx` and
+  `breakdown-chart.tsx`) take literal color strings and can't use
+  Tailwind's `dark:` modifier, so both files now call `useTheme()` from
+  `next-themes` and pick axis/grid/tooltip/legend colors based on
+  `resolvedTheme`.
+- Deliberately left dark-always, by design (confirmed with the user for
+  the SkillGraph canvas): `SkillGraphCanvas` (the Cytoscape graph panel —
+  toolbar, legend, canvas, status bar) and the two full-screen dialogs
+  (`add-repository-dialog.tsx`, `auth-modal.tsx`, which render on a
+  `bg-black/70` backdrop as self-contained dark surfaces). None of these
+  have a "white card with invisible text" problem — they're internally
+  consistent dark panels regardless of site theme, so re-theming them
+  would be cosmetic churn, not a contrast fix.
+- Verified: `npx tsc --noEmit` clean, `next build` succeeded (same 12
+  routes), full `npx vitest run` = 72/72 passing. Hit the same pre-existing
+  Vite-cache flakiness noted in Checkpoint 42 (`TypeError: Cannot read
+  properties of undefined (reading 'config')` at `describe()`, across
+  unrelated files including a trivial zero-import test) — confirmed via a
+  `git stash && git stash pop` round-trip that it's a filesystem
+  mtime/Vite dependency-cache staleness artifact on Windows, not caused by
+  this change: the round-trip (which only touches file timestamps, not
+  content) reliably "fixes" it, and it reproduces identically on the
+  pre-existing clean tree too.
+
+### Checkpoint 44 — Fixed Real Crash: `PageExplainer` Caused "notify of null" on Route Navigation (2026-11-14)
+- **Why**: The user hit a reproducible `Uncaught TypeError: Cannot read
+  properties of null (reading 'notify')` crash navigating `/skillgraph` →
+  `/evidence` (this is the same error reported earlier as unreproducible
+  via a scripted Playwright check — it needed a real route transition,
+  not a scripted click, to surface). `PageExplainer`
+  (`frontend/src/components/dashboard/page-explainer.tsx`, rendered on
+  every dashboard page) used `motion/react`'s `AnimatePresence` +
+  `motion.div` with a `height: "auto"` JS animation for its
+  expand/collapse body. Next.js's App Router unmounts the old page's
+  React tree synchronously on navigation — it does not wait for
+  `AnimatePresence` exit animations — so a pending framer-motion
+  animation frame callback could fire after the real DOM node was
+  already removed, hitting a null internal ref inside the library's
+  `notify(...)` call.
+- **Fix**: Rewrote `PageExplainer`'s collapsible body as a pure-CSS
+  `grid-template-rows: 0fr ↔ 1fr` transition (no `motion`/`AnimatePresence`
+  involved at all) — same visual expand/collapse behavior, immune to this
+  class of bug since there's no JS animation frame loop that can outlive
+  an abrupt unmount. `motion-reduce:transition-none` covers
+  `prefers-reduced-motion` without needing `useReducedMotion()`.
+- Left `StaggerItem` (`ui/stagger-item.tsx`, used for table-row entrance
+  animation on Evidence/Capabilities) untouched — it only has an
+  `initial`/`animate` mount animation with no `exit`/`AnimatePresence`, so
+  it doesn't carry the same "library still thinks it owns an exiting DOM
+  node that's already gone" race; only components combining
+  `AnimatePresence` + a JS-driven layout/height animation at a page's top
+  level (i.e. directly subject to Next.js's unmanaged route-level unmount)
+  are at risk of this specific crash.
+- Also observed (separately, benign, not changed): Cytoscape console
+  warnings on SkillGraph — `Edge ... has invalid endpoints and so it is
+  impossible to draw` — fire for a single frame while newly-added nodes
+  briefly sit at the same default position before `runLayout()`'s
+  `cose`/`concentric`/etc. layout spreads them out; Cytoscape's own
+  message says this is "expected behaviour," it's cosmetic console noise
+  only, not a rendering or functional bug.
+- Verified: `npx tsc --noEmit` clean, `next build` succeeded (same 12
+  routes), full `npx vitest run` = 72/72 passing.
 
 ## Forbidden Behaviors
 Agents must NOT:
